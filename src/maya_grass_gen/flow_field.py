@@ -146,6 +146,9 @@ class FlowField:
         # distance from obstacle center
         dist = np.sqrt(to_point_x**2 + to_point_y**2)
 
+        # influence_radius is guaranteed to be set by __post_init__
+        assert obstacle.influence_radius is not None
+
         # if inside obstacle or at center, return strong outward push
         if dist < obstacle.radius:
             if dist < DISTANCE_EPSILON:
@@ -225,7 +228,7 @@ class FlowField:
             angle in radians
         """
         vx, vy = self.get_flow(x, y, time)
-        return np.arctan2(vy, vx)
+        return float(np.arctan2(vy, vx))
 
 
 @dataclass
@@ -300,6 +303,9 @@ class PointClusterer:
         density = 1.0
 
         for obstacle in self.obstacles:
+            # influence_radius is guaranteed to be set by __post_init__
+            assert obstacle.influence_radius is not None
+
             # distance from obstacle center
             dx = x - obstacle.x
             dy = y - obstacle.y
@@ -452,6 +458,9 @@ class PointClusterer:
             )
 
             for obstacle in self.obstacles:
+                # influence_radius is guaranteed to be set by __post_init__
+                assert obstacle.influence_radius is not None
+
                 # add points in rings around the obstacle edge
                 inner_radius = obstacle.radius + self.config.edge_offset * 0.5
                 outer_radius = obstacle.radius + obstacle.influence_radius * 0.4

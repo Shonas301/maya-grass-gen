@@ -126,21 +126,23 @@ def _validate_params(
         raise ValueError(msg)
 
 
-def _get_unique_network_name(base_name: str = "grass_MASH") -> str:
+def _get_unique_network_name(base_name: str = "grass_mash") -> str:
     """Generate a unique MASH network name.
+
+    Uses snake_case with 3-digit padded versioning.
 
     Args:
         base_name: base name for the network
 
     Returns:
-        unique network name (e.g., grass_MASH_1, grass_MASH_2)
+        unique network name (e.g., grass_mash_001, grass_mash_002)
     """
     # lazy import for testing outside maya
     from maya import cmds
 
     counter = 1
     while True:
-        name = f"{base_name}_{counter}"
+        name = f"{base_name}_{counter:03d}"
         if not cmds.objExists(name):
             return name
         counter += 1
@@ -157,6 +159,7 @@ def generate_grass(
     octaves: int = 4,  # noqa: ARG001 - reserved for future use
     time_scale: float = 0.008,
     proximity_density_boost: float = 1.0,
+    network_name: str | None = None,
 ) -> str:
     """Generate animated grass on a terrain mesh.
 
@@ -178,6 +181,8 @@ def generate_grass(
         proximity_density_boost: multiplier for grass density near obstacles.
             1.0 = no effect (default), 3.0 = 3x density near obstacles.
             Simulates foot traffic avoidance effect.
+        network_name: explicit name for the MASH network. if None, generates
+            a unique name like grass_mash_001.
 
     Returns:
         name of created MASH network for further manipulation
@@ -192,7 +197,7 @@ def generate_grass(
         >>> from maya_grass import generate_grass
         >>> network = generate_grass('terrain', 'grassBlade')
         >>> print(f"Created: {network}")
-        Created: grass_MASH_1
+        Created: grass_mash_001
     """
     # validate inputs before doing any work
     _validate_mesh_exists(terrain_mesh, "Terrain mesh")
@@ -232,8 +237,9 @@ def generate_grass(
     # generate grass points
     generator.generate_points(count=count, seed=seed, scale_variation=scale_var)
 
-    # create unique MASH network name
-    network_name = _get_unique_network_name()
+    # create unique MASH network name if not provided
+    if network_name is None:
+        network_name = _get_unique_network_name()
 
     # create MASH network with mesh distribution
     generator.create_mash_network(
