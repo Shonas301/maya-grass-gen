@@ -1,3 +1,5 @@
+"""Setup configuration for maya_grass_gen package."""
+
 import re
 from pathlib import Path
 

@@ -4,13 +4,10 @@ these tests verify the standalone functionality of the maya grass plugin
 without requiring an actual maya installation.
 """
 
-import json
 import math
 import tempfile
 from pathlib import Path
 
-import numpy as np
-import pytest
 from PIL import Image
 
 from maya_grass_gen.generator import GrassGenerator, GrassPoint
@@ -577,7 +574,8 @@ class TestWindFieldObstacleAwareExpression:
         # then
         assert "obstacles = " in expr
         assert "get_obstacle_deflection" in expr
-        assert "x" in expr and "z" in expr
+        assert "x" in expr
+        assert "z" in expr
 
     def test_expression_contains_deflection_logic(self) -> None:
         """test that expression has tangential deflection logic."""

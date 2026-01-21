@@ -139,7 +139,7 @@ class TestValidateMeshExists:
         self.mock_cmds.objExists.return_value = False
 
         # lazy import required to get mocked maya.cmds
-        from maya_grass_gen import _validate_mesh_exists  # noqa: PLC0415
+        from maya_grass_gen import _validate_mesh_exists
 
         with pytest.raises(RuntimeError, match="not found"):
             _validate_mesh_exists("nonexistent_mesh", "terrain")
@@ -150,7 +150,7 @@ class TestValidateMeshExists:
         self.mock_cmds.listRelatives.return_value = None
 
         # lazy import required to get mocked maya.cmds
-        from maya_grass_gen import _validate_mesh_exists  # noqa: PLC0415
+        from maya_grass_gen import _validate_mesh_exists
 
         with pytest.raises(RuntimeError, match="no mesh shape"):
             _validate_mesh_exists("empty_transform", "terrain")
@@ -162,7 +162,7 @@ class TestValidateMeshExists:
         self.mock_cmds.polyEvaluate.return_value = 0
 
         # lazy import required to get mocked maya.cmds
-        from maya_grass_gen import _validate_mesh_exists  # noqa: PLC0415
+        from maya_grass_gen import _validate_mesh_exists
 
         with pytest.raises(RuntimeError, match="no faces"):
             _validate_mesh_exists("empty_mesh", "terrain")
@@ -174,7 +174,7 @@ class TestValidateMeshExists:
         self.mock_cmds.polyEvaluate.return_value = 100
 
         # lazy import required to get mocked maya.cmds
-        from maya_grass_gen import _validate_mesh_exists  # noqa: PLC0415
+        from maya_grass_gen import _validate_mesh_exists
 
         # should not raise
         _validate_mesh_exists("valid_mesh", "terrain")
@@ -210,14 +210,14 @@ class TestGetUniqueNetworkName:
             sys.modules.pop("maya.cmds", None)
 
     def test_first_name_available(self) -> None:
-        """Should return _1 suffix when no networks exist."""
+        """Should return _001 suffix when no networks exist."""
         self.mock_cmds.objExists.return_value = False
 
         # lazy import required to get mocked maya.cmds
-        from maya_grass_gen import _get_unique_network_name  # noqa: PLC0415
+        from maya_grass_gen import _get_unique_network_name
 
         result = _get_unique_network_name()
-        assert result == "grass_MASH_1"
+        assert result == "grass_mash_001"
 
     def test_increments_until_available(self) -> None:
         """Should increment until finding available name."""
@@ -225,20 +225,20 @@ class TestGetUniqueNetworkName:
         self.mock_cmds.objExists.side_effect = [True, True, True, False]
 
         # lazy import required to get mocked maya.cmds
-        from maya_grass_gen import _get_unique_network_name  # noqa: PLC0415
+        from maya_grass_gen import _get_unique_network_name
 
         result = _get_unique_network_name()
-        assert result == "grass_MASH_4"
+        assert result == "grass_mash_004"
 
     def test_custom_base_name(self) -> None:
         """Should use custom base name if provided."""
         self.mock_cmds.objExists.return_value = False
 
         # lazy import required to get mocked maya.cmds
-        from maya_grass_gen import _get_unique_network_name  # noqa: PLC0415
+        from maya_grass_gen import _get_unique_network_name
 
         result = _get_unique_network_name(base_name="myGrass")
-        assert result == "myGrass_1"
+        assert result == "myGrass_001"
 
 
 class TestImportWithoutMaya:

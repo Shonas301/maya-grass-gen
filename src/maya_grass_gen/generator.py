@@ -10,6 +10,7 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -28,12 +29,12 @@ except ImportError:
 
 # try to import maya modules
 try:
-    from maya import cmds  # type: ignore[import-not-found]
+    from maya import cmds
 
     MAYA_AVAILABLE = True
 except ImportError:
     MAYA_AVAILABLE = False
-    cmds = None  # type: ignore[assignment]
+    cmds = None
 
 
 @dataclass
@@ -515,23 +516,25 @@ class GrassGenerator:
 
         # point-based distribution (pre-computed positions with animated wind)
         distribute = mash_network.addNode("MASH_Distribute")
-        cmds.setAttr(f"{distribute}.distribution", 0)  # initial state
-        cmds.setAttr(f"{distribute}.pointCount", len(self._grass_points))
+        distribute_name = distribute.name
+        cmds.setAttr(f"{distribute_name}.distribution", 0)  # initial state
+        cmds.setAttr(f"{distribute_name}.pointCount", len(self._grass_points))
 
         mash_network.setPointCount(len(self._grass_points))
 
         # set positions via MASH python node with animated wind
         python_node = mash_network.addNode("MASH_Python")
+        python_node_name = python_node.name
 
         # generate animated wind code that recalculates rotation each frame
         wind_code = self._generate_point_based_wind_code()
-        cmds.setAttr(f"{python_node}.pythonCode", wind_code, type="string")
+        cmds.setAttr(f"{python_node_name}.pythonCode", wind_code, type="string")
 
         return network_name
 
     def _create_mesh_distributed_network(
         self,
-        mash_network: object,
+        mash_network: Any,
         terrain_mesh: str | None,
         network_name: str,
     ) -> str:
@@ -552,10 +555,11 @@ class GrassGenerator:
 
         # add distribute node set to mesh distribution mode
         distribute = mash_network.addNode("MASH_Distribute")
+        distribute_name = distribute.name
 
         # distribution mode 4 = mesh
-        cmds.setAttr(f"{distribute}.distribution", 4)
-        cmds.setAttr(f"{distribute}.pointCount", len(self._grass_points))
+        cmds.setAttr(f"{distribute_name}.distribution", 4)
+        cmds.setAttr(f"{distribute_name}.pointCount", len(self._grass_points))
 
         # connect terrain mesh to distribute node
         if target_mesh:
@@ -563,7 +567,7 @@ class GrassGenerator:
             if mesh_shape:
                 cmds.connectAttr(
                     f"{mesh_shape[0]}.worldMesh[0]",
-                    f"{distribute}.inputMesh",
+                    f"{distribute_name}.inputMesh",
                     force=True,
                 )
 
@@ -571,10 +575,11 @@ class GrassGenerator:
 
         # add python node for wind-based orientation
         python_node = mash_network.addNode("MASH_Python")
+        python_node_name = python_node.name
 
         # generate wind expression that updates with time
         wind_code = self._generate_wind_python_code()
-        cmds.setAttr(f"{python_node}.pythonCode", wind_code, type="string")
+        cmds.setAttr(f"{python_node_name}.pythonCode", wind_code, type="string")
 
         return network_name
 

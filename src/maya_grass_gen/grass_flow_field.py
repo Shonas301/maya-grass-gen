@@ -325,6 +325,9 @@ class GrassFlowFieldSketch(Sketch):
         self.stroke_weight(2.0)
 
         for obstacle in self.flow_field.obstacles:
+            # influence_radius is guaranteed to be set by __post_init__
+            assert obstacle.influence_radius is not None
+
             # outer influence radius (faint)
             self.stroke(100, 100, 100, 30)
             self.no_fill()

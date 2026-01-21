@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 # import from flow_field module
 try:
@@ -367,7 +367,8 @@ for i in range(len(md.position)):
         if time_samples is None:
             time_samples = [0.0]
 
-        data = {
+        samples: dict[str, list[dict[Any, Any]]] = {}
+        data: dict[str, Any] = {
             "config": {
                 "noise_scale": self.noise_scale,
                 "wind_strength": self.wind_strength,
@@ -380,13 +381,13 @@ for i in range(len(md.position)):
                 "max_z": max_z,
             },
             "obstacles": self._obstacles,
-            "samples": {},
+            "samples": samples,
         }
 
         for t in time_samples:
             self.set_time(t)
-            samples = self.sample_wind_grid(min_x, max_x, min_z, max_z, resolution)
-            data["samples"][str(t)] = samples
+            grid_samples = self.sample_wind_grid(min_x, max_x, min_z, max_z, resolution)
+            samples[str(t)] = grid_samples
 
         Path(output_path).write_text(json.dumps(data, indent=2))
 
