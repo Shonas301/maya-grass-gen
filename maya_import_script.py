@@ -62,6 +62,10 @@ def run(  # noqa: PLR0913
     """
     setup_path()
 
+    import importlib
+    import maya_grass_gen
+
+    importlib.reload(maya_grass_gen)
     from maya_grass_gen import generate_grass
 
     # use explicit version, fall back to global VERSION
