@@ -1,0 +1,135 @@
+[build-system]
+requires = ["setuptools >= 45.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.coverage.run]
+omit = [
+    ".venv/*",
+    "tests/*",
+    "docs/*",
+    "setup.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self\\.debug",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+ignore_errors = true
+
+[tool.pytest.ini_options]
+addopts = "-vv --doctest-modules --doctest-report ndiff"
+doctest_optionflags= "NORMALIZE_WHITESPACE IGNORE_EXCEPTION_DETAIL ELLIPSIS NUMBER"
+testpaths = [
+    "tests",
+]
+markers = [
+    "e2e"
+]
+
+[tool.mypy]
+ignore_missing_imports = true
+warn_redundant_casts  = true
+warn_return_any = true
+warn_unused_ignores  = true
+warn_unused_configs  = true
+no_implicit_optional = true
+namespace_packages = true
+explicit_package_bases = true
+warn_unreachable = true
+show_error_context = true
+mypy_path = "src"
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+
+[tool.ruff]
+exclude = [
+    ".venv",
+    "build",
+    ".git",
+    "docs",
+    ".mypy_cache",
+]
+
+line-length = 88
+src = ["src"]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E501",
+    "E",
+    "F",
+    "W",
+    "I",
+    "D",
+    "A",
+    "ARG",
+    "B",
+    "BLE",
+    "C",
+    "DTZ",
+    "EM",
+    "ERA",
+    "EXE",
+    "FBT",
+    "G",
+    "ICN",
+    "INP",
+    "ISC",
+    "N",
+    "PD",
+    "PGH",
+    "PIE",
+    "PL",
+    "PT",
+    "PTH",
+    "Q",
+    "RET",
+    "RUF",
+    "S",
+    "SIM",
+    "T",
+    "TCH",
+    "TID",
+    "TRY",
+    "UP",
+    "YTT",
+]
+ignore = ["E501", "S101", "EM101", "TRY003", "EXE002"]
+
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D", "INP001"]
+"src/maya_grass_gen/*.py" = [
+    "C901",      # terrain blob detection is inherently complex
+    "PLR0913",   # methods need many config params
+    "FBT001",    # boolean config options
+    "FBT002",    # boolean default values for config
+    "ARG002",    # some args reserved for maya-specific implementation
+    "PLC0415",   # conditional imports for maya/non-maya environments
+    "T201",      # print statements for user feedback
+    "PLR0912",   # complex algorithms
+    "PLR0915",   # complex algorithms
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["maya_grass_gen"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10

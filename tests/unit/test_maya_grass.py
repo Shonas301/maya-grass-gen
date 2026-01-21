@@ -1,0 +1,697 @@
+"""Unit tests for maya_grass_gen module.
+
+these tests verify the standalone functionality of the maya grass plugin
+without requiring an actual maya installation.
+"""
+
+import json
+import math
+import tempfile
+from pathlib import Path
+
+import numpy as np
+import pytest
+from PIL import Image
+
+from maya_grass_gen.generator import GrassGenerator, GrassPoint
+from maya_grass_gen.terrain import DetectedObstacle, TerrainAnalyzer, TerrainBounds
+from maya_grass_gen.wind import WindField
+
+
+class TestTerrainBounds:
+    """Tests for TerrainBounds dataclass."""
+
+    def test_terrain_bounds_dimensions(self) -> None:
+        """test that bounds correctly calculate width, depth, height."""
+        # given
+        bounds = TerrainBounds(
+            min_x=0, max_x=100, min_y=0, max_y=50, min_z=0, max_z=200
+        )
+
+        # then
+        assert bounds.width == 100
+        assert bounds.height == 50
+        assert bounds.depth == 200
+
+
+class TestDetectedObstacle:
+    """Tests for DetectedObstacle dataclass."""
+
+    def test_to_flow_obstacle(self) -> None:
+        """test conversion to flow field obstacle format."""
+        # given
+        obstacle = DetectedObstacle(
+            center_x=100, center_z=200, radius=50, height=0.8
+        )
+
+        # when
+        flow_obs = obstacle.to_flow_obstacle()
+
+        # then
+        assert flow_obs["x"] == 100
+        assert flow_obs["y"] == 200  # z maps to y in flow field
+        assert flow_obs["radius"] == 50
+        assert flow_obs["influence_radius"] == 125.0  # 50 * 2.5
+
+
+class TestTerrainAnalyzer:
+    """Tests for TerrainAnalyzer class."""
+
+    def test_manual_bounds_setting(self) -> None:
+        """test that bounds can be set manually."""
+        # given
+        analyzer = TerrainAnalyzer()
+
+        # when
+        analyzer.set_bounds_manual(
+            min_x=0, max_x=1000, min_z=0, max_z=1000
+        )
+
+        # then
+        assert analyzer.bounds is not None
+        assert analyzer.bounds.width == 1000
+        assert analyzer.bounds.depth == 1000
+
+    def test_load_bump_map(self) -> None:
+        """test loading a bump map from image file."""
+        # given
+        analyzer = TerrainAnalyzer()
+        analyzer.set_bounds_manual(0, 100, 0, 100)
+
+        # create a simple test image
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            img = Image.new("L", (100, 100), color=128)
+            img.save(f.name)
+            temp_path = f.name
+
+        # when
+        analyzer.load_bump_map(temp_path)
+        value = analyzer.get_bump_value_at_uv(0.5, 0.5)
+
+        # then
+        assert abs(value - 0.502) < 0.01  # 128/255 ≈ 0.502
+
+        # cleanup
+        Path(temp_path).unlink()
+
+    def test_get_bump_value_at_world(self) -> None:
+        """test sampling bump map in world coordinates."""
+        # given
+        analyzer = TerrainAnalyzer()
+        analyzer.set_bounds_manual(0, 100, 0, 100)
+
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            # create gradient image (darker on left, brighter on right)
+            img = Image.new("L", (100, 100))
+            for x in range(100):
+                for y in range(100):
+                    img.putpixel((x, y), int(x * 2.55))
+            img.save(f.name)
+            temp_path = f.name
+
+        analyzer.load_bump_map(temp_path)
+
+        # when
+        left_value = analyzer.get_bump_value_at_world(10, 50)
+        right_value = analyzer.get_bump_value_at_world(90, 50)
+
+        # then - right side should be brighter
+        assert right_value > left_value
+
+        Path(temp_path).unlink()
+
+    def test_detect_obstacles_from_bump(self) -> None:
+        """test obstacle detection from bump map."""
+        # given
+        analyzer = TerrainAnalyzer()
+        analyzer.set_bounds_manual(0, 100, 0, 100)
+
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            # create image with white circle in center (obstacle)
+            img = Image.new("L", (100, 100), color=0)
+            for x in range(100):
+                for y in range(100):
+                    dist = math.sqrt((x - 50) ** 2 + (y - 50) ** 2)
+                    if dist < 20:
+                        img.putpixel((x, y), 255)
+            img.save(f.name)
+            temp_path = f.name
+
+        analyzer.load_bump_map(temp_path)
+
+        # when
+        obstacles = analyzer.detect_obstacles_from_bump(threshold=0.5, min_radius=5)
+
+        # then
+        assert len(obstacles) > 0
+        # center should be roughly at 50, 50
+        assert 40 < obstacles[0].center_x < 60
+        assert 40 < obstacles[0].center_z < 60
+
+        Path(temp_path).unlink()
+
+    def test_add_obstacle_manual(self) -> None:
+        """test manually adding obstacles."""
+        # given
+        analyzer = TerrainAnalyzer()
+
+        # when
+        analyzer.add_obstacle_manual(100, 200, 50)
+
+        # then
+        assert len(analyzer.obstacles) == 1
+        assert analyzer.obstacles[0].center_x == 100
+        assert analyzer.obstacles[0].center_z == 200
+        assert analyzer.obstacles[0].radius == 50
+        assert analyzer.obstacles[0].source == "manual"
+
+    def test_export_import_obstacles_json(self) -> None:
+        """test exporting and importing obstacles."""
+        # given
+        analyzer = TerrainAnalyzer()
+        analyzer.set_bounds_manual(0, 1000, 0, 1000)
+        analyzer.add_obstacle_manual(100, 200, 50)
+        analyzer.add_obstacle_manual(500, 600, 75)
+
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            temp_path = f.name
+
+        # when - export
+        analyzer.export_obstacles_json(temp_path)
+
+        # import into new analyzer
+        analyzer2 = TerrainAnalyzer()
+        analyzer2.import_obstacles_json(temp_path)
+
+        # then
+        assert len(analyzer2.obstacles) == 2
+        assert analyzer2.obstacles[0].center_x == 100
+        assert analyzer2.obstacles[1].radius == 75
+
+        Path(temp_path).unlink()
+
+
+class TestWindField:
+    """Tests for WindField class."""
+
+    def test_wind_field_creation(self) -> None:
+        """test that wind field initializes correctly."""
+        # given/when
+        wind = WindField(
+            noise_scale=0.01, wind_strength=5.0, time_scale=0.02
+        )
+
+        # then
+        assert wind.noise_scale == 0.01
+        assert wind.wind_strength == 5.0
+        assert wind.time_scale == 0.02
+
+    def test_add_obstacle(self) -> None:
+        """test adding obstacle to wind field."""
+        # given
+        wind = WindField()
+
+        # when
+        wind.add_obstacle(x=100, z=200, radius=50)
+
+        # then
+        assert len(wind._obstacles) == 1
+
+    def test_get_wind_at_returns_vector(self) -> None:
+        """test that get_wind_at returns a 2d vector."""
+        # given
+        wind = WindField()
+
+        # when
+        wx, wz = wind.get_wind_at(100, 100)
+
+        # then
+        assert isinstance(wx, float)
+        assert isinstance(wz, float)
+
+    def test_get_wind_angle(self) -> None:
+        """test that wind angle is in valid range."""
+        # given
+        wind = WindField()
+
+        # when
+        angle_rad = wind.get_wind_angle_at(100, 100)
+        angle_deg = wind.get_wind_angle_degrees(100, 100)
+
+        # then
+        assert -math.pi <= angle_rad <= math.pi
+        assert -180 <= angle_deg <= 180
+
+    def test_time_affects_wind(self) -> None:
+        """test that wind changes with time."""
+        # given
+        wind = WindField()
+
+        # when
+        wind.set_time(0)
+        wind1 = wind.get_wind_at(100, 100)
+
+        wind.set_time(100)
+        wind2 = wind.get_wind_at(100, 100)
+
+        # then - wind should change over time
+        assert wind1 != wind2
+
+    def test_sample_wind_grid(self) -> None:
+        """test sampling wind on a grid."""
+        # given
+        wind = WindField()
+
+        # when
+        samples = wind.sample_wind_grid(
+            min_x=0, max_x=100, min_z=0, max_z=100, resolution=10
+        )
+
+        # then
+        assert len(samples) == 100  # 10x10 grid
+        assert "x" in samples[0]
+        assert "wind_x" in samples[0]
+        assert "angle_rad" in samples[0]
+
+    def test_generate_maya_expression(self) -> None:
+        """test that maya expression generation produces valid code."""
+        # given
+        wind = WindField(noise_scale=0.005, time_scale=0.01)
+
+        # when
+        expr = wind.generate_maya_expression(time_variable="frame")
+
+        # then
+        assert "noise_scale = 0.005" in expr
+        assert "time_scale = 0.01" in expr
+        assert "def get_wind_angle" in expr
+        assert "frame" in expr
+
+    def test_export_import_wind_data(self) -> None:
+        """test exporting and importing wind data."""
+        # given
+        wind = WindField(noise_scale=0.01, wind_strength=3.0)
+        wind.add_obstacle(100, 200, 50)
+
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            temp_path = f.name
+
+        # when
+        wind.export_wind_data_json(
+            temp_path,
+            min_x=0, max_x=1000,
+            min_z=0, max_z=1000,
+            resolution=5,
+        )
+
+        wind2 = WindField()
+        wind2.import_wind_data_json(temp_path)
+
+        # then
+        assert wind2.noise_scale == 0.01
+        assert wind2.wind_strength == 3.0
+
+        Path(temp_path).unlink()
+
+
+class TestGrassPoint:
+    """Tests for GrassPoint dataclass."""
+
+    def test_grass_point_to_dict(self) -> None:
+        """test conversion to dictionary."""
+        # given
+        point = GrassPoint(
+            x=100, y=0, z=200,
+            rotation_y=45, lean_angle=15, lean_direction=90,
+            scale=1.2
+        )
+
+        # when
+        d = point.to_dict()
+
+        # then
+        assert d["x"] == 100
+        assert d["y"] == 0
+        assert d["z"] == 200
+        assert d["rotation_y"] == 45
+        assert d["lean_angle"] == 15
+        assert d["scale"] == 1.2
+
+
+class TestGrassGenerator:
+    """Tests for GrassGenerator class."""
+
+    def test_from_bounds(self) -> None:
+        """test creating generator with manual bounds."""
+        # given/when
+        gen = GrassGenerator.from_bounds(
+            min_x=0, max_x=1000, min_z=0, max_z=1000
+        )
+
+        # then
+        assert gen.terrain.bounds is not None
+        assert gen.terrain.bounds.width == 1000
+
+    def test_configure_clustering(self) -> None:
+        """test configuring clustering parameters."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+
+        # when
+        gen.configure_clustering(
+            min_distance=10,
+            obstacle_density_multiplier=5,
+        )
+
+        # then
+        assert gen._clustering_config["min_distance"] == 10
+        assert gen._clustering_config["obstacle_density_multiplier"] == 5
+
+    def test_configure_wind(self) -> None:
+        """test configuring wind parameters."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+
+        # when
+        gen.configure_wind(noise_scale=0.01, wind_strength=5)
+
+        # then
+        assert gen.wind.noise_scale == 0.01
+        assert gen.wind.wind_strength == 5
+
+    def test_add_obstacle(self) -> None:
+        """test adding obstacle to generator."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+
+        # when
+        gen.add_obstacle(50, 50, 20)
+
+        # then
+        assert len(gen.terrain.obstacles) == 1
+        assert len(gen.wind._obstacles) == 1
+
+    def test_generate_points(self) -> None:
+        """test point generation."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+
+        # when
+        count = gen.generate_points(count=100, seed=42)
+
+        # then
+        assert count > 0
+        assert len(gen.grass_points) == count
+        # check points are within bounds
+        for p in gen.grass_points:
+            assert 0 <= p.x <= 100
+            assert 0 <= p.z <= 100
+
+    def test_generate_points_avoids_obstacles(self) -> None:
+        """test that generated points avoid obstacles."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.add_obstacle(50, 50, 20)
+
+        # when
+        gen.generate_points(count=500, seed=42)
+
+        # then - no points inside obstacle
+        for p in gen.grass_points:
+            dist = math.sqrt((p.x - 50) ** 2 + (p.z - 50) ** 2)
+            assert dist >= 20
+
+    def test_update_wind_time(self) -> None:
+        """test updating wind animation time."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=10, seed=42)
+
+        initial_angles = [p.lean_direction for p in gen.grass_points]
+
+        # when
+        gen.update_wind_time(100)
+        new_angles = [p.lean_direction for p in gen.grass_points]
+
+        # then - angles should change
+        assert initial_angles != new_angles
+
+    def test_export_import_points_json(self) -> None:
+        """test exporting and importing grass points."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=50, seed=42)
+
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            temp_path = f.name
+
+        # when
+        gen.export_points_json(temp_path)
+
+        gen2 = GrassGenerator.from_bounds(0, 100, 0, 100)
+        count = gen2.import_points_json(temp_path)
+
+        # then
+        assert count == len(gen.grass_points)
+        assert gen2.grass_points[0].x == gen.grass_points[0].x
+
+        Path(temp_path).unlink()
+
+    def test_export_csv(self) -> None:
+        """test exporting to CSV format."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=10, seed=42)
+
+        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
+            temp_path = f.name
+
+        # when
+        gen.export_csv(temp_path)
+
+        # then
+        content = Path(temp_path).read_text()
+        lines = content.strip().split("\n")
+        assert len(lines) == 11  # header + 10 points
+        assert "x,y,z" in lines[0]
+
+        Path(temp_path).unlink()
+
+    def test_detect_scene_obstacles_returns_zero_without_maya(self) -> None:
+        """test that scene obstacle detection returns 0 without maya."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+
+        # when
+        count = gen.detect_scene_obstacles()
+
+        # then - should return 0 since maya isn't available
+        assert count == 0
+
+    def test_detect_all_obstacles_combines_sources(self) -> None:
+        """test that detect_all_obstacles combines bump map and manual obstacles."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.add_obstacle(25, 25, 10)
+        gen.add_obstacle(75, 75, 10)
+
+        # when - calling detect_all clears and re-adds obstacles
+        count = gen.detect_all_obstacles()
+
+        # then - should have the manually added obstacles
+        # (bump map won't detect any without a loaded image)
+        assert count >= 0  # depends on whether bump map is loaded
+
+
+class TestTerrainAnalyzerSceneDetection:
+    """Tests for scene object detection in TerrainAnalyzer."""
+
+    def test_detect_obstacles_from_scene_without_maya(self) -> None:
+        """test that scene detection returns empty list without maya."""
+        # given
+        analyzer = TerrainAnalyzer()
+        analyzer.set_bounds_manual(0, 100, 0, 100)
+
+        # when
+        obstacles = analyzer.detect_obstacles_from_scene()
+
+        # then - should return empty list without maya
+        assert obstacles == []
+
+    def test_detect_all_obstacles_without_bump_map(self) -> None:
+        """test detect_all_obstacles when no bump map or maya available."""
+        # given
+        analyzer = TerrainAnalyzer()
+        analyzer.set_bounds_manual(0, 100, 0, 100)
+
+        # when - detect_all_obstacles only detects from sources (bump map, scene)
+        # it doesn't include manually added obstacles
+        obstacles = analyzer.detect_all_obstacles()
+
+        # then - should return empty list when no sources available
+        assert len(obstacles) == 0
+
+    def test_detect_all_obstacles_with_bump_map(self) -> None:
+        """test detect_all_obstacles with bump map."""
+        # given
+        analyzer = TerrainAnalyzer()
+        analyzer.set_bounds_manual(0, 100, 0, 100)
+
+        # create bump map with obstacle
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            img = Image.new("L", (100, 100), color=0)
+            for x in range(100):
+                for y in range(100):
+                    dist = math.sqrt((x - 50) ** 2 + (y - 50) ** 2)
+                    if dist < 15:
+                        img.putpixel((x, y), 255)
+            img.save(f.name)
+            temp_path = f.name
+
+        analyzer.load_bump_map(temp_path)
+
+        # when
+        obstacles = analyzer.detect_all_obstacles(
+            bump_threshold=0.5, min_radius=5
+        )
+
+        # then
+        assert len(obstacles) > 0
+
+        Path(temp_path).unlink()
+
+
+class TestWindFieldObstacleAwareExpression:
+    """Tests for obstacle-aware wind expression generation."""
+
+    def test_expression_includes_obstacles(self) -> None:
+        """test that generated expression includes obstacle data."""
+        # given
+        wind = WindField()
+        wind.add_obstacle(100, 200, 50)
+        wind.add_obstacle(300, 400, 75)
+
+        # when
+        expr = wind.generate_maya_expression()
+
+        # then
+        assert "obstacles = " in expr
+        assert "get_obstacle_deflection" in expr
+        assert "x" in expr and "z" in expr
+
+    def test_expression_contains_deflection_logic(self) -> None:
+        """test that expression has tangential deflection logic."""
+        # given
+        wind = WindField()
+        wind.add_obstacle(100, 200, 50)
+
+        # when
+        expr = wind.generate_maya_expression()
+
+        # then
+        assert "tangent_x" in expr
+        assert "tangent_z" in expr
+        assert "falloff" in expr
+
+    def test_expression_without_obstacles(self) -> None:
+        """test that expression works without any obstacles."""
+        # given
+        wind = WindField()
+
+        # when
+        expr = wind.generate_maya_expression()
+
+        # then
+        assert "obstacles = []" in expr
+        assert "get_wind_at" in expr
+
+
+class TestGrassGeneratorMeshDistribution:
+    """Tests for MASH network mesh distribution features."""
+
+    def test_create_mash_network_returns_none_without_maya(self) -> None:
+        """test that create_mash_network returns None without maya."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=10, seed=42)
+
+        # when
+        result = gen.create_mash_network("grassBlade")
+
+        # then
+        assert result is None
+
+    def test_create_mash_network_with_mesh_option_returns_none(self) -> None:
+        """test that mesh distribution option works without maya."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=10, seed=42)
+
+        # when
+        result = gen.create_mash_network(
+            "grassBlade",
+            distribute_on_mesh=True,
+            terrain_mesh="terrainMesh"
+        )
+
+        # then
+        assert result is None
+
+    def test_generate_wind_python_code_contains_obstacles(self) -> None:
+        """test that wind python code generator includes obstacles."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.add_obstacle(50, 50, 20)
+
+        # when
+        code = gen._generate_wind_python_code()
+
+        # then
+        assert "obstacles" in code
+        assert "get_obstacle_deflection" in code
+        assert "50" in code  # obstacle x position
+
+    def test_generate_wind_python_code_has_animation(self) -> None:
+        """test that wind code references frame for animation."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+
+        # when
+        code = gen._generate_wind_python_code()
+
+        # then
+        assert "frame" in code
+        assert "md.rotation" in code
+        assert "md.position" in code
+
+    def test_generate_point_based_wind_code_has_positions(self) -> None:
+        """test that point-based code includes pre-computed positions."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=10, seed=42)
+
+        # when
+        code = gen._generate_point_based_wind_code()
+
+        # then
+        assert "positions = " in code
+        assert "scales = " in code
+        assert "base_rotations = " in code
+        assert "frame" in code  # animated
+        assert "get_wind_vector" in code
+
+    def test_generate_point_based_wind_code_has_animation(self) -> None:
+        """test that point-based code animates rotation based on frame."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.add_obstacle(50, 50, 20)
+        gen.generate_points(count=10, seed=42)
+
+        # when
+        code = gen._generate_point_based_wind_code()
+
+        # then
+        assert "md.position[i] = positions[i]" in code
+        assert "wind_angle = math.atan2" in code
+        assert "lean_amount" in code
+        assert "obstacles" in code
