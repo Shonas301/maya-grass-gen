@@ -40,9 +40,26 @@ Features:
     - export to JSON for external tools
 """
 
+# force reload submodules when this module is reloaded in maya
+# this ensures code changes propagate without restarting maya
+try:
+    if _maya_grass_gen_loaded:
+        import importlib
+        from maya_grass_gen import generator, terrain, wind, flow_field, noise_utils
+        importlib.reload(noise_utils)
+        importlib.reload(flow_field)
+        importlib.reload(terrain)
+        importlib.reload(wind)
+        importlib.reload(generator)
+        print("maya_grass_gen: reloaded all submodules")
+except NameError:
+    pass  # first import, flag not defined yet
+
 from maya_grass_gen.generator import GrassGenerator
 from maya_grass_gen.terrain import TerrainAnalyzer
 from maya_grass_gen.wind import WindField
+
+_maya_grass_gen_loaded = True
 
 __all__ = [
     "GrassGenerator",
