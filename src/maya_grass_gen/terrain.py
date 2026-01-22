@@ -128,6 +128,8 @@ class TerrainAnalyzer:
         if not MAYA_AVAILABLE or not self.mesh_name:
             return
 
+        print(f"analyzing mesh '{self.mesh_name}'")
+
         # get bounding box
         bbox = cmds.exactWorldBoundingBox(self.mesh_name)
         self._bounds = TerrainBounds(
@@ -138,6 +140,9 @@ class TerrainAnalyzer:
             max_y=bbox[4],
             max_z=bbox[5],
         )
+
+        print(f"terrain bounds: min_x={bbox[0]:.2f}, max_x={bbox[3]:.2f}, "
+              f"min_z={bbox[2]:.2f}, max_z={bbox[5]:.2f}")
 
     @property
     def bounds(self) -> TerrainBounds | None:
@@ -249,6 +254,8 @@ class TerrainAnalyzer:
         Returns:
             list of detected obstacles
         """
+        print(f"detecting obstacles from bump map (threshold={threshold})")
+
         if self._bump_map is None or self._bounds is None:
             return []
 
@@ -342,6 +349,7 @@ class TerrainAnalyzer:
             obstacles = self._merge_obstacles(obstacles, merge_distance)
 
         self._obstacles = obstacles
+        print(f"found {len(obstacles)} obstacles from bump map")
         return obstacles
 
     def _merge_obstacles(
@@ -503,6 +511,8 @@ class TerrainAnalyzer:
         Returns:
             list of detected obstacles from scene geometry
         """
+        print("scanning scene for obstacles...")
+
         if not MAYA_AVAILABLE:
             return []
 
@@ -513,6 +523,9 @@ class TerrainAnalyzer:
         if self.mesh_name:
             exclude.add(self.mesh_name)
 
+        if exclude:
+            print(f"excluding: {exclude}")
+
         detected: list[DetectedObstacle] = []
 
         # get all mesh transforms in scene
@@ -522,6 +535,8 @@ class TerrainAnalyzer:
             parent = cmds.listRelatives(mesh, parent=True, fullPath=True)
             if parent:
                 transforms.add(parent[0])
+
+        print(f"found {len(transforms)} mesh transforms to check")
 
         for transform in transforms:
             # get short name for exclusion check
@@ -561,6 +576,9 @@ class TerrainAnalyzer:
 
             height = obj_max_y - obj_min_y
 
+            # print individual obstacle info
+            print(f"  obstacle: {short_name} at ({center_x:.1f}, {center_z:.1f}) r={radius:.1f}")
+
             detected.append(
                 DetectedObstacle(
                     center_x=center_x,
@@ -571,6 +589,7 @@ class TerrainAnalyzer:
                 )
             )
 
+        print(f"detected {len(detected)} scene obstacles")
         self._obstacles.extend(detected)
         return detected
 
@@ -604,6 +623,7 @@ class TerrainAnalyzer:
                 min_radius=min_radius,
                 merge_distance=0,  # merge later
             )
+            print(f"bump map obstacles: {len(bump_obstacles)}")
             all_obstacles.extend(bump_obstacles)
 
         # detect from scene objects
@@ -612,11 +632,13 @@ class TerrainAnalyzer:
                 exclude_objects=exclude_objects,
                 min_radius=min_radius,
             )
+            print(f"scene obstacles: {len(scene_obstacles)}")
             all_obstacles.extend(scene_obstacles)
 
         # merge all obstacles
         if merge_distance > 0:
             all_obstacles = self._merge_obstacles(all_obstacles, merge_distance)
+            print(f"after merge: {len(all_obstacles)} total obstacles")
 
         self._obstacles = all_obstacles
         return all_obstacles
