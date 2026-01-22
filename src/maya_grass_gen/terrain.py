@@ -16,16 +16,13 @@ from PIL import Image
 
 # try to import maya modules, fall back to stubs for standalone use
 try:
-    from maya import (
-        OpenMaya,  # type: ignore[import-not-found]
-        cmds,  # type: ignore[import-not-found]
-    )
+    from maya import OpenMaya, cmds
 
     MAYA_AVAILABLE = True
 except ImportError:
     MAYA_AVAILABLE = False
-    cmds = None  # type: ignore[assignment]
-    OpenMaya = None  # type: ignore[assignment]
+    cmds = None
+    OpenMaya = None
 
 
 @dataclass
@@ -255,6 +252,9 @@ class TerrainAnalyzer:
         if self._bump_map is None or self._bounds is None:
             return []
 
+        # capture bounds for use in nested function (mypy narrowing)
+        bounds = self._bounds
+
         height, width = self._bump_map.shape
         obstacles: list[DetectedObstacle] = []
 
@@ -312,11 +312,11 @@ class TerrainAnalyzer:
             u = cx_px / (width - 1)
             v = 1.0 - (cy_px / (height - 1))
 
-            world_x = self._bounds.min_x + u * self._bounds.width
-            world_z = self._bounds.min_z + v * self._bounds.depth
+            world_x = bounds.min_x + u * bounds.width
+            world_z = bounds.min_z + v * bounds.depth
 
             # scale radius to world units
-            world_radius = radius_px / width * self._bounds.width
+            world_radius = radius_px / width * bounds.width
 
             return (world_x, world_z, world_radius)
 
