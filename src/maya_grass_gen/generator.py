@@ -514,23 +514,67 @@ class GrassGenerator:
                 mash_network, terrain_mesh, network_name
             )
 
-        # point-based distribution (pre-computed positions with animated wind)
-        distribute = mash_network.addNode("MASH_Distribute")
-        distribute_name = distribute.name
-        cmds.setAttr(f"{distribute_name}.distribution", 0)  # initial state
-        cmds.setAttr(f"{distribute_name}.pointCount", len(self._grass_points))
+        try:
+            # point-based distribution (pre-computed positions with animated wind)
+            distribute = mash_network.addNode("MASH_Distribute")
+            distribute_name = self._get_mash_node_name(distribute, "Distribute")
+            cmds.setAttr(f"{distribute_name}.distribution", 0)  # initial state
+            cmds.setAttr(f"{distribute_name}.pointCount", len(self._grass_points))
 
-        mash_network.setPointCount(len(self._grass_points))
+            mash_network.setPointCount(len(self._grass_points))
 
-        # set positions via MASH python node with animated wind
-        python_node = mash_network.addNode("MASH_Python")
-        python_node_name = python_node.name
+            # set positions via MASH python node with animated wind
+            python_node = mash_network.addNode("MASH_Python")
+            python_node_name = self._get_mash_node_name(python_node, "Python")
 
-        # generate animated wind code that recalculates rotation each frame
-        wind_code = self._generate_point_based_wind_code()
-        cmds.setAttr(f"{python_node_name}.pythonCode", wind_code, type="string")
+            # generate animated wind code that recalculates rotation each frame
+            wind_code = self._generate_point_based_wind_code()
+            cmds.setAttr(f"{python_node_name}.pythonCode", wind_code, type="string")
+        except RuntimeError as e:
+            msg = f"failed to create MASH network '{network_name}': {e}"
+            raise RuntimeError(msg) from e
 
         return network_name
+
+    def _get_mash_node_name(self, node_wrapper: Any, node_type: str) -> str:
+        """Resolve actual Maya node name from MASH node wrapper.
+
+        The MASH API addNode() returns a wrapper object whose .name property
+        may not match the actual Maya node name. This function tries multiple
+        approaches to find the correct name.
+
+        Args:
+            node_wrapper: object returned by mash_network.addNode()
+            node_type: type hint for error messages (e.g., "Distribute", "Python")
+
+        Returns:
+            actual Maya node name as string
+
+        Raises:
+            RuntimeError: if node cannot be found in scene
+        """
+        # try getNodeName() method (MASH API)
+        if hasattr(node_wrapper, 'getNodeName'):
+            name = node_wrapper.getNodeName()
+            if name and cmds.objExists(name):
+                return name
+
+        # try .name property
+        if hasattr(node_wrapper, 'name'):
+            name = node_wrapper.name
+            if name and cmds.objExists(name):
+                return name
+
+        # try finding by type pattern in recent nodes
+        # MASH nodes typically have the network name as prefix
+        pattern = f"*MASH_{node_type}*"
+        matches = cmds.ls(pattern, type=f"MASH_{node_type}")
+        if matches:
+            # return most recently created (last in list after sort)
+            return matches[-1]
+
+        msg = f"could not resolve MASH {node_type} node name from wrapper"
+        raise RuntimeError(msg)
 
     def _create_mesh_distributed_network(
         self,
@@ -553,33 +597,37 @@ class GrassGenerator:
         """
         target_mesh = terrain_mesh or self.terrain.mesh_name
 
-        # add distribute node set to mesh distribution mode
-        distribute = mash_network.addNode("MASH_Distribute")
-        distribute_name = distribute.name
+        try:
+            # add distribute node set to mesh distribution mode
+            distribute = mash_network.addNode("MASH_Distribute")
+            distribute_name = self._get_mash_node_name(distribute, "Distribute")
 
-        # distribution mode 4 = mesh
-        cmds.setAttr(f"{distribute_name}.distribution", 4)
-        cmds.setAttr(f"{distribute_name}.pointCount", len(self._grass_points))
+            # distribution mode 4 = mesh
+            cmds.setAttr(f"{distribute_name}.distribution", 4)
+            cmds.setAttr(f"{distribute_name}.pointCount", len(self._grass_points))
 
-        # connect terrain mesh to distribute node
-        if target_mesh:
-            mesh_shape = cmds.listRelatives(target_mesh, shapes=True, type="mesh")
-            if mesh_shape:
-                cmds.connectAttr(
-                    f"{mesh_shape[0]}.worldMesh[0]",
-                    f"{distribute_name}.inputMesh",
-                    force=True,
-                )
+            # connect terrain mesh to distribute node
+            if target_mesh:
+                mesh_shape = cmds.listRelatives(target_mesh, shapes=True, type="mesh")
+                if mesh_shape:
+                    cmds.connectAttr(
+                        f"{mesh_shape[0]}.worldMesh[0]",
+                        f"{distribute_name}.inputMesh",
+                        force=True,
+                    )
 
-        mash_network.setPointCount(len(self._grass_points))
+            mash_network.setPointCount(len(self._grass_points))
 
-        # add python node for wind-based orientation
-        python_node = mash_network.addNode("MASH_Python")
-        python_node_name = python_node.name
+            # add python node for wind-based orientation
+            python_node = mash_network.addNode("MASH_Python")
+            python_node_name = self._get_mash_node_name(python_node, "Python")
 
-        # generate wind expression that updates with time
-        wind_code = self._generate_wind_python_code()
-        cmds.setAttr(f"{python_node_name}.pythonCode", wind_code, type="string")
+            # generate wind expression that updates with time
+            wind_code = self._generate_wind_python_code()
+            cmds.setAttr(f"{python_node_name}.pythonCode", wind_code, type="string")
+        except RuntimeError as e:
+            msg = f"failed to create mesh-distributed MASH network '{network_name}': {e}"
+            raise RuntimeError(msg) from e
 
         return network_name
 
