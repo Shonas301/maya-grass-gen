@@ -590,6 +590,26 @@ class TerrainAnalyzer:
             )
 
         print(f"detected {len(detected)} scene obstacles")
+
+        # debug: show obstacle coverage statistics
+        if detected:
+            total_area = self._bounds.width * self._bounds.depth if self._bounds else 0
+            obstacle_area = sum(np.pi * obs.radius**2 for obs in detected)
+            coverage_pct = (obstacle_area / total_area * 100) if total_area > 0 else 0
+            radii = [obs.radius for obs in detected]
+            print(f"  obstacle area coverage: {coverage_pct:.1f}% of terrain")
+            print(f"  radii: min={min(radii):.1f}, max={max(radii):.1f}, avg={sum(radii)/len(radii):.1f}")
+
+            # show a few sample obstacles to see what's being detected
+            if len(detected) <= 5:
+                print(f"  all obstacles:")
+                for obs in detected:
+                    print(f"    {obs.source}: pos=({obs.center_x:.1f},{obs.center_z:.1f}), r={obs.radius:.1f}")
+            else:
+                print(f"  first 5 obstacles:")
+                for obs in detected[:5]:
+                    print(f"    {obs.source}: pos=({obs.center_x:.1f},{obs.center_z:.1f}), r={obs.radius:.1f}")
+
         self._obstacles.extend(detected)
         return detected
 
