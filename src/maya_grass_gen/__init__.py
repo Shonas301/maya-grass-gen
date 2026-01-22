@@ -199,6 +199,24 @@ def generate_grass(
         >>> print(f"Created: {network}")
         Created: grass_mash_001
     """
+    import time
+
+    start_time = time.time()
+
+    # print all input parameters
+    print(f"generate_grass called with parameters:")
+    print(f"  terrain_mesh: {terrain_mesh}")
+    print(f"  grass_geometry: {grass_geometry}")
+    print(f"  count: {count}")
+    print(f"  wind_strength: {wind_strength}")
+    print(f"  scale_variation: {scale_variation}")
+    print(f"  seed: {seed}")
+    print(f"  noise_scale: {noise_scale}")
+    print(f"  octaves: {octaves}")
+    print(f"  time_scale: {time_scale}")
+    print(f"  proximity_density_boost: {proximity_density_boost}")
+    print(f"  network_name: {network_name}")
+
     # validate inputs before doing any work
     _validate_mesh_exists(terrain_mesh, "Terrain mesh")
     _validate_mesh_exists(grass_geometry, "Grass geometry")
@@ -208,9 +226,16 @@ def generate_grass(
     from maya_grass_gen.noise_utils import init_noise
 
     init_noise(seed)
+    print(f"noise initialized with seed {seed}")
 
     # create terrain analyzer and grass generator
     terrain = TerrainAnalyzer(mesh_name=terrain_mesh)
+    bounds = terrain.bounds
+    if bounds:
+        print(f"terrain bounds: min_x={bounds.min_x:.2f}, max_x={bounds.max_x:.2f}, "
+              f"min_z={bounds.min_z:.2f}, max_z={bounds.max_z:.2f}, "
+              f"width={bounds.width:.2f}, depth={bounds.depth:.2f}")
+
     generator = GrassGenerator(terrain=terrain)
 
     # configure wind field
@@ -219,11 +244,14 @@ def generate_grass(
         wind_strength=wind_strength,
         time_scale=time_scale,
     )
+    print(f"wind configured: noise_scale={noise_scale}, wind_strength={wind_strength}, "
+          f"time_scale={time_scale}")
 
     # detect obstacles from scene (exclude terrain and grass geometry)
-    generator.detect_scene_obstacles(
+    obstacle_count = generator.detect_scene_obstacles(
         exclude_objects=[terrain_mesh, grass_geometry],
     )
+    print(f"detected {obstacle_count} scene obstacles")
 
     # configure clustering with proximity density boost
     generator.configure_clustering(
@@ -235,7 +263,8 @@ def generate_grass(
     scale_var = (scale_variation[1] - scale_variation[0]) / 2
 
     # generate grass points
-    generator.generate_points(count=count, seed=seed, scale_variation=scale_var)
+    point_count = generator.generate_points(count=count, seed=seed, scale_variation=scale_var)
+    print(f"generated {point_count} grass points")
 
     # create unique MASH network name if not provided
     if network_name is None:
@@ -248,5 +277,9 @@ def generate_grass(
         distribute_on_mesh=True,
         terrain_mesh=terrain_mesh,
     )
+    print(f"created MASH network: {network_name}")
+
+    elapsed = time.time() - start_time
+    print(f"grass generation complete in {elapsed:.2f}s")
 
     return network_name
