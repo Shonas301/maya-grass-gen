@@ -545,7 +545,7 @@ class GrassGenerator:
         try:
             # point-based distribution (pre-computed positions with animated wind)
             distribute = mash_network.addNode("MASH_Distribute")
-            distribute_name = self._get_mash_node_name(distribute, "Distribute")
+            distribute_name = self._get_mash_node_name(distribute, "Distribute", network_name)
             print(f"added MASH node: {distribute_name}")
             cmds.setAttr(f"{distribute_name}.distribution", 0)  # initial state
             cmds.setAttr(f"{distribute_name}.pointCount", len(self._grass_points))
@@ -554,7 +554,7 @@ class GrassGenerator:
 
             # set positions via MASH python node with animated wind
             python_node = mash_network.addNode("MASH_Python")
-            python_node_name = self._get_mash_node_name(python_node, "Python")
+            python_node_name = self._get_mash_node_name(python_node, "Python", network_name)
             print(f"added MASH node: {python_node_name}")
 
             # generate animated wind code that recalculates rotation each frame
@@ -567,7 +567,7 @@ class GrassGenerator:
         print("MASH network ready")
         return network_name
 
-    def _get_mash_node_name(self, node_wrapper: Any, node_type: str) -> str:
+    def _get_mash_node_name(self, node_wrapper: Any, node_type: str, network_name: str = "") -> str:
         """Resolve actual Maya node name from MASH node wrapper.
 
         The MASH API addNode() returns a wrapper object whose .name property
@@ -577,6 +577,7 @@ class GrassGenerator:
         Args:
             node_wrapper: object returned by mash_network.addNode()
             node_type: type hint for error messages (e.g., "Distribute", "Python")
+            network_name: name of the MASH network (used to filter matching nodes)
 
         Returns:
             actual Maya node name as string
@@ -584,6 +585,9 @@ class GrassGenerator:
         Raises:
             RuntimeError: if node cannot be found in scene
         """
+        # force scene to evaluate so new nodes are visible
+        cmds.refresh(force=True)
+
         # try getNodeName() method (MASH API)
         if hasattr(node_wrapper, 'getNodeName'):
             name = node_wrapper.getNodeName()
@@ -596,12 +600,26 @@ class GrassGenerator:
             if name and cmds.objExists(name):
                 return name
 
-        # try finding by type pattern in recent nodes
-        # MASH nodes typically have the network name as prefix
+        # try string conversion (some MASH wrappers support this)
+        try:
+            name = str(node_wrapper)
+            if name and cmds.objExists(name):
+                return name
+        except (TypeError, ValueError):
+            pass
+
+        # try finding by type pattern, filtered by network name if provided
         pattern = f"*MASH_{node_type}*"
-        matches = cmds.ls(pattern, type=f"MASH_{node_type}")
+        matches = cmds.ls(pattern, type=f"MASH_{node_type}") or []
+
+        # filter to only nodes that match our network name prefix
+        if network_name and matches:
+            filtered = [m for m in matches if m.startswith(network_name)]
+            if filtered:
+                matches = filtered
+
         if matches:
-            # return most recently created (last in list after sort)
+            # return most recently created (last in list)
             return matches[-1]
 
         msg = f"could not resolve MASH {node_type} node name from wrapper"
@@ -631,8 +649,16 @@ class GrassGenerator:
         try:
             # add distribute node set to mesh distribution mode
             distribute = mash_network.addNode("MASH_Distribute")
-            distribute_name = self._get_mash_node_name(distribute, "Distribute")
+            distribute_name = self._get_mash_node_name(distribute, "Distribute", network_name)
             print(f"added MASH node: {distribute_name}")
+
+            # verify node exists before setting attributes
+            if not cmds.objExists(distribute_name):
+                # list all MASH_Distribute nodes for debugging
+                all_distributes = cmds.ls(type="MASH_Distribute") or []
+                print(f"  WARNING: node '{distribute_name}' not found!")
+                print(f"  available MASH_Distribute nodes: {all_distributes}")
+                raise RuntimeError(f"MASH distribute node '{distribute_name}' does not exist")
 
             # distribution mode 4 = mesh
             cmds.setAttr(f"{distribute_name}.distribution", 4)
@@ -653,7 +679,7 @@ class GrassGenerator:
 
             # add python node for wind-based orientation
             python_node = mash_network.addNode("MASH_Python")
-            python_node_name = self._get_mash_node_name(python_node, "Python")
+            python_node_name = self._get_mash_node_name(python_node, "Python", network_name)
             print(f"added MASH node: {python_node_name}")
 
             # generate wind expression that updates with time
