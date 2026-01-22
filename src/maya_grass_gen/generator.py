@@ -402,6 +402,14 @@ class GrassGenerator:
         # convert obstacles to flow field format
         flow_obstacles = [o.to_flow_obstacle() for o in self.terrain.obstacles]
 
+        # debug: print obstacle statistics
+        if flow_obstacles:
+            radii = [obs["radius"] for obs in flow_obstacles]
+            influence_radii = [obs.get("influence_radius", obs["radius"] * 2.5) for obs in flow_obstacles]
+            print(f"obstacle radii: min={min(radii):.1f}, max={max(radii):.1f}, avg={sum(radii)/len(radii):.1f}")
+            print(f"obstacle influence radii: min={min(influence_radii):.1f}, max={max(influence_radii):.1f}, avg={sum(influence_radii)/len(influence_radii):.1f}")
+            print(f"terrain dimensions: width={bounds.width:.1f}, depth={bounds.depth:.1f}")
+
         config = ClusteringConfig(**self._clustering_config)
         clusterer = PointClusterer(
             width=bounds.width,

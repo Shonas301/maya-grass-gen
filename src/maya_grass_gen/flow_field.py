@@ -427,7 +427,23 @@ class PointClusterer:
 
         points: list[tuple[float, float]] = []
 
+        # debug: sample density at a few grid positions
+        if grid_rows > 0 and grid_cols > 0:
+            sample_positions = [
+                (cell_width * 0.5, cell_height * 0.5),  # bottom-left
+                (cell_width * (grid_cols - 0.5), cell_height * 0.5),  # bottom-right
+                (cell_width * 0.5, cell_height * (grid_rows - 0.5)),  # top-left
+                (cell_width * (grid_cols - 0.5), cell_height * (grid_rows - 0.5)),  # top-right
+                (cell_width * (grid_cols / 2), cell_height * (grid_rows / 2)),  # center
+            ]
+            print(f"Sampling density at grid positions (width={self.width:.1f}, height={self.height:.1f}):")
+            for px, py in sample_positions:
+                density = self.get_density_at(px, py)
+                print(f"  ({px:.1f}, {py:.1f}): density={density:.3f}")
+
         # phase 1: generate jittered grid points for even base distribution
+        phase1_total = 0
+        phase1_rejected = 0
         for row in range(grid_rows):
             for col in range(grid_cols):
                 # center of cell
@@ -446,16 +462,24 @@ class PointClusterer:
                 py = max(0, min(self.height - 1, py))
 
                 # check not inside obstacle
-                if self.get_density_at(px, py) > 0:
+                phase1_total += 1
+                density = self.get_density_at(px, py)
+                if density > 0:
                     points.append((px, py))
+                else:
+                    phase1_rejected += 1
+
+        print(f"Phase 1: generated {len(points)} points from {grid_rows}x{grid_cols} grid ({phase1_total} total, {phase1_rejected} rejected)")
 
         # phase 2: add extra points clustered around obstacle edges
+        phase2_added = 0
         if self.obstacles:
             # calculate how many extra points to add based on multiplier
             extra_ratio = self.config.obstacle_density_multiplier - 1.0
             extra_points_per_obstacle = int(
                 (num_points * extra_ratio) / (len(self.obstacles) * 3)
             )
+            print(f"Phase 2: attempting {extra_points_per_obstacle} extra points per obstacle ({len(self.obstacles)} obstacles)")
 
             for obstacle in self.obstacles:
                 # influence_radius is guaranteed to be set by __post_init__
@@ -486,7 +510,11 @@ class PointClusterer:
                     # check not inside any obstacle
                     if self.get_density_at(px, py) > 0:
                         points.append((px, py))
+                        phase2_added += 1
 
+            print(f"Phase 2: added {phase2_added} extra points around obstacles")
+
+        print(f"Total points generated: {len(points)} (target was {num_points})")
         return points
 
 
