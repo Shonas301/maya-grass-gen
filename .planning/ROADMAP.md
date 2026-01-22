@@ -13,7 +13,7 @@ This milestone migrates the Maya grass plugin from the `noise` library to `opens
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 70: Noise Wrapper Foundation** - Create opensimplex fBm wrapper with matching API
-- [ ] **Phase 71: FlowField Migration** - Migrate FlowField from noise.pnoise3 to opensimplex fBm
+- [x] **Phase 71: FlowField Migration** - Migrate FlowField from noise.pnoise3 to opensimplex fBm
 - [x] **Phase 72: Flow Field Migration** - Migrate flow_field.py and PointClusterer noise dependencies
 - [x] **Phase 73: Entry Point Creation** - Create generate_grass() single-function entry point
 - [x] **Phase 74: Dependency Cleanup** - Remove noise library, update requirements
@@ -58,7 +58,7 @@ Plans:
 Plans:
 - [x] 71-01-PLAN.md — Replace noise.pnoise3 in FlowField.get_base_flow() with fbm_noise3
 - [x] 71-02-PLAN.md — Add continuity tests verifying organic wind patterns
-- [ ] 71-03-PLAN.md — Fix MASH node naming issue (gap closure from UAT)
+- [x] 71-03-PLAN.md — Fix MASH node naming issue (gap closure from UAT)
 
 ---
 
@@ -206,7 +206,7 @@ Phases execute in dependency order: 70 -> 71 -> 72 -> 73 -> 74 -> **79** -> 75 -
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 70. Noise Wrapper Foundation | 2/2 | Complete | 2026-01-20 |
-| 71. FlowField Migration | 2/3 | In Progress (gap closure) | - |
+| 71. FlowField Migration | 3/3 | Complete | 2026-01-22 |
 | 72. Flow Field Migration | 2/2 | Complete | 2026-01-20 |
 | 73. Entry Point Creation | 2/2 | Complete | 2026-01-20 |
 | 74. Dependency Cleanup | 1/1 | Complete | 2026-01-20 |
@@ -244,3 +244,4 @@ Phases execute in dependency order: 70 -> 71 -> 72 -> 73 -> 74 -> **79** -> 75 -
 *Phase 74 planned: 2026-01-20*
 *Phase 74 completed: 2026-01-20*
 *Phase 79 planned: 2026-01-20*
+*Phase 71 completed: 2026-01-22*
