@@ -526,8 +526,12 @@ class GrassGenerator:
         # create MASH network
         import MASH.api as mapi
 
+        # select grass geometry before creating MASH network
+        # MASH picks up the selected object as the geometry to instance
+        cmds.select(grass_geometry, replace=True)
+
         mash_network = mapi.Network()
-        mash_network.createNetwork(name=network_name)
+        mash_network.createNetwork(name=network_name, geometry='Repro')
 
         if distribute_on_mesh:
             # use mesh surface distribution
