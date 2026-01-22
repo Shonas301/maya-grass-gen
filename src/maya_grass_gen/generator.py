@@ -245,6 +245,7 @@ class GrassGenerator:
         self,
         exclude_objects: list[str] | None = None,
         min_radius: float = 5.0,
+        max_obstacle_radius: float | None = None,
     ) -> int:
         """Detect obstacles from scene objects.
 
@@ -254,6 +255,7 @@ class GrassGenerator:
         Args:
             exclude_objects: list of object names to exclude
             min_radius: minimum obstacle radius to detect
+            max_obstacle_radius: maximum obstacle radius (defaults to 25% terrain diagonal)
 
         Returns:
             number of obstacles detected from scene
@@ -261,6 +263,7 @@ class GrassGenerator:
         obstacles = self.terrain.detect_obstacles_from_scene(
             exclude_objects=exclude_objects,
             min_radius=min_radius,
+            max_obstacle_radius=max_obstacle_radius,
         )
 
         # add to wind field
@@ -274,6 +277,7 @@ class GrassGenerator:
         min_radius: float = 10.0,
         merge_distance: float = 20.0,
         exclude_objects: list[str] | None = None,
+        max_obstacle_radius: float | None = None,
     ) -> int:
         """Detect obstacles from both bump map and scene objects.
 
@@ -285,6 +289,7 @@ class GrassGenerator:
             min_radius: minimum obstacle radius
             merge_distance: distance to merge nearby obstacles
             exclude_objects: scene objects to exclude
+            max_obstacle_radius: maximum obstacle radius for scene objects (defaults to 25% terrain diagonal)
 
         Returns:
             total number of obstacles detected
@@ -294,6 +299,7 @@ class GrassGenerator:
             min_radius=min_radius,
             merge_distance=merge_distance,
             exclude_objects=exclude_objects,
+            max_obstacle_radius=max_obstacle_radius,
         )
 
         # add to wind field

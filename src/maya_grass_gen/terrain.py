@@ -497,6 +497,7 @@ class TerrainAnalyzer:
         self,
         exclude_objects: list[str] | None = None,
         min_radius: float = 5.0,
+        max_obstacle_radius: float | None = None,
     ) -> list[DetectedObstacle]:
         """Detect obstacles from scene objects that intersect terrain bounds.
 
@@ -507,6 +508,9 @@ class TerrainAnalyzer:
         Args:
             exclude_objects: list of object names to exclude (e.g., terrain mesh)
             min_radius: minimum radius for detected obstacles
+            max_obstacle_radius: maximum radius for detected obstacles. obstacles larger
+                than this are filtered out (typically background/environment objects).
+                defaults to 25% of terrain diagonal if not specified.
 
         Returns:
             list of detected obstacles from scene geometry
@@ -518,6 +522,17 @@ class TerrainAnalyzer:
 
         if self._bounds is None:
             return []
+
+        # calculate default max radius if not provided: 25% of terrain diagonal
+        if max_obstacle_radius is None:
+            terrain_diagonal = np.sqrt(
+                self._bounds.width**2 + self._bounds.depth**2
+            )
+            max_obstacle_radius = terrain_diagonal * 0.25
+            print(f"max obstacle radius (auto): {max_obstacle_radius:.1f} "
+                  f"(25% of terrain diagonal {terrain_diagonal:.1f})")
+        else:
+            print(f"max obstacle radius (user): {max_obstacle_radius:.1f}")
 
         exclude = set(exclude_objects or [])
         if self.mesh_name:
@@ -574,6 +589,12 @@ class TerrainAnalyzer:
             if radius < min_radius:
                 continue
 
+            # filter out obstacles that are too large (background/environment objects)
+            if radius > max_obstacle_radius:
+                print(f"  skipping {short_name}: radius {radius:.1f} exceeds max {max_obstacle_radius:.1f} "
+                      f"(likely background object)")
+                continue
+
             height = obj_max_y - obj_min_y
 
             # print individual obstacle info
@@ -619,6 +640,7 @@ class TerrainAnalyzer:
         min_radius: float = 10.0,
         merge_distance: float = 20.0,
         exclude_objects: list[str] | None = None,
+        max_obstacle_radius: float | None = None,
     ) -> list[DetectedObstacle]:
         """Detect obstacles from both bump map and scene objects.
 
@@ -630,6 +652,7 @@ class TerrainAnalyzer:
             min_radius: minimum obstacle radius
             merge_distance: distance to merge nearby obstacles
             exclude_objects: scene objects to exclude
+            max_obstacle_radius: maximum radius for scene obstacles (defaults to 25% terrain diagonal)
 
         Returns:
             combined list of all detected obstacles
@@ -651,6 +674,7 @@ class TerrainAnalyzer:
             scene_obstacles = self.detect_obstacles_from_scene(
                 exclude_objects=exclude_objects,
                 min_radius=min_radius,
+                max_obstacle_radius=max_obstacle_radius,
             )
             print(f"scene obstacles: {len(scene_obstacles)}")
             all_obstacles.extend(scene_obstacles)
