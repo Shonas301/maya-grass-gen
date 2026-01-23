@@ -826,6 +826,11 @@ for i in range(min(len(positions), len(md.position))):
 
         return f'''
 import math
+import openMASH
+
+# initialize MASH data
+md = openMASH.MASHData(thisNode)
+frame = md.getFrame()
 
 # wind parameters
 noise_scale = {self.wind.noise_scale}
@@ -836,13 +841,11 @@ time_scale = {self.wind.time_scale}
 obstacles = {obstacles_data}
 
 def get_obstacle_deflection(x, z, obs):
-    """Calculate deflection from single obstacle."""
     dx = x - obs["x"]
     dz = z - obs["z"]
     dist = math.sqrt(dx*dx + dz*dz)
 
     if dist < obs["radius"]:
-        # inside obstacle - push outward
         if dist < 0.001:
             return (1.0, 0.0)
         scale = wind_strength * 2 / dist
@@ -851,7 +854,6 @@ def get_obstacle_deflection(x, z, obs):
     if dist > obs["influence"]:
         return (0.0, 0.0)
 
-    # tangential deflection
     falloff = 1.0 - (dist - obs["radius"]) / (obs["influence"] - obs["radius"])
     falloff = falloff * falloff
 
@@ -864,8 +866,6 @@ def get_obstacle_deflection(x, z, obs):
     return (tangent_x * strength, tangent_z * strength)
 
 def get_wind_angle(x, z, time):
-    """Calculate wind angle at position with obstacle avoidance."""
-    # base perlin-like wind
     angle = (
         math.sin(x * noise_scale + time * time_scale)
         * math.cos(z * noise_scale + time * time_scale)
@@ -874,7 +874,6 @@ def get_wind_angle(x, z, time):
     vx = math.cos(angle) * wind_strength
     vz = math.sin(angle) * wind_strength
 
-    # add obstacle deflection
     for obs in obstacles:
         dx, dz = get_obstacle_deflection(x, z, obs)
         vx += dx
@@ -883,14 +882,14 @@ def get_wind_angle(x, z, time):
     return math.atan2(vz, vx)
 
 # apply wind to each point
-for i in range(len(md.position)):
-    x, y, z = md.position[i]
-    angle = get_wind_angle(x, z, frame)
-
-    # calculate lean based on wind magnitude
+count = md.count()
+for i in range(count):
+    pos = md.outPosition[i]
+    angle = get_wind_angle(pos.x, pos.z, frame)
     lean_amount = 15 + 10 * abs(math.sin(angle))
+    md.outRotation[i] = (0, math.degrees(angle), lean_amount)
 
-    md.rotation[i] = (0, math.degrees(angle), lean_amount)
+md.setData()
 '''
 
     def export_points_json(self, output_path: str) -> None:
