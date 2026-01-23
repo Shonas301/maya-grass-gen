@@ -3,10 +3,26 @@
 
 global proc install() {
     // get this script's location
+    // whatIs returns: "Mel procedure found in: /path/to/install.mel"
     string $scriptLocation = `whatIs "install"`;
-    string $tokens[];
-    tokenize($scriptLocation, "\"", $tokens);
-    string $scriptPath = $tokens[1];
+
+    // extract path after "found in: "
+    string $scriptPath = "";
+    if (`gmatch $scriptLocation "*found in:*"`) {
+        // remove everything up to and including "found in: "
+        $scriptPath = `substitute ".*found in: " $scriptLocation ""`;
+    }
+
+    // fallback: if path extraction failed, prompt user
+    if ($scriptPath == "" || !`filetest -f $scriptPath`) {
+        string $result = `fileDialog -mode 0 -title "Select install.mel location"`;
+        if ($result != "") {
+            $scriptPath = $result;
+        } else {
+            error "Could not determine install.mel location. Installation cancelled.";
+            return;
+        }
+    }
 
     // get module root (parent directory of this script)
     string $modulePath = dirname($scriptPath);
