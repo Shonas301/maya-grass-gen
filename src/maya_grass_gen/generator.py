@@ -688,19 +688,30 @@ class GrassGenerator:
             print(f"  {network_name}* nodes: {matching}")
             print(f"{'='*60}\n")
 
-            distribute_name = self._get_mash_node_name(distribute, "Distribute", network_name)
-            print(f"resolved distribute node name: {distribute_name}")
+            # FIX: use the waiter-based name (without numeric suffix) which has the real attributes
+            # the wrapper's .name returns _Distribute1 but the real node is _Distribute
+            waiter_name = mash_network.waiter
+            distribute_name = f"{waiter_name}_Distribute"
+            print(f"using waiter-based distribute name: {distribute_name}")
 
             # verify node exists before setting attributes
             if not cmds.objExists(distribute_name):
-                print(f"  ERROR: node '{distribute_name}' does not exist!")
-                print(f"  cmds.objExists('{distribute_name}'): {cmds.objExists(distribute_name)}")
-                # try without the attribute
-                base_name = distribute_name.split('.')[0]
-                print(f"  cmds.objExists('{base_name}'): {cmds.objExists(base_name)}")
-                if cmds.objExists(base_name):
-                    attrs = cmds.listAttr(base_name) or []
-                    print(f"  attributes on {base_name}: {[a for a in attrs if 'distrib' in a.lower()]}")
+                print(f"  WARNING: {distribute_name} not found, trying fallback...")
+                # fallback: find matching distribute node without numeric suffix
+                matching_distributes = [d for d in all_distributes if d.startswith(waiter_name)]
+                print(f"  matching distributes: {matching_distributes}")
+                # prefer the one without a trailing digit
+                for d in matching_distributes:
+                    if not d[-1].isdigit():
+                        distribute_name = d
+                        print(f"  using fallback: {distribute_name}")
+                        break
+                else:
+                    if matching_distributes:
+                        distribute_name = matching_distributes[0]
+                        print(f"  using first match: {distribute_name}")
+
+            if not cmds.objExists(distribute_name):
                 raise RuntimeError(f"MASH distribute node '{distribute_name}' does not exist")
 
             # list attributes containing 'distribution' to verify the right attr name
@@ -728,8 +739,21 @@ class GrassGenerator:
 
             # add python node for wind-based orientation
             python_node = mash_network.addNode("MASH_Python")
-            python_node_name = self._get_mash_node_name(python_node, "Python", network_name)
-            print(f"added MASH node: {python_node_name}")
+            # FIX: use waiter-based name for python node too
+            python_node_name = f"{waiter_name}_Python"
+            print(f"using waiter-based python name: {python_node_name}")
+            if not cmds.objExists(python_node_name):
+                all_pythons = cmds.ls(type="MASH_Python") or []
+                matching_pythons = [p for p in all_pythons if p.startswith(waiter_name)]
+                print(f"  python node {python_node_name} not found, matches: {matching_pythons}")
+                for p in matching_pythons:
+                    if not p[-1].isdigit():
+                        python_node_name = p
+                        break
+                else:
+                    if matching_pythons:
+                        python_node_name = matching_pythons[0]
+            print(f"final python node: {python_node_name}")
 
             # generate wind expression that updates with time
             wind_code = self._generate_wind_python_code()
