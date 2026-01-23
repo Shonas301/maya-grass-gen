@@ -292,17 +292,12 @@ def generate_grass(
         obstacle_density_multiplier=proximity_density_boost,
     )
 
-    # calculate scale_variation for generate_points
-    # generate_points expects variation values (0-1 range)
-    scale_var_wave1 = (scale_variation_wave1[1] - scale_variation_wave1[0]) / 2
-    scale_var_wave2 = (scale_variation_wave2[1] - scale_variation_wave2[0]) / 2
-
     # generate grass points
     point_count = generator.generate_points(
         count=count,
         seed=seed,
-        scale_variation_wave1=scale_var_wave1,
-        scale_variation_wave2=scale_var_wave2,
+        scale_variation_wave1=scale_variation_wave1,
+        scale_variation_wave2=scale_variation_wave2,
     )
     print(f"generated {point_count} grass points")
 

@@ -325,8 +325,8 @@ class GrassGenerator:
         seed: int | None = None,
         height: float = 0.0,
         random_rotation: bool = True,
-        scale_variation_wave1: float = 0.2,
-        scale_variation_wave2: float = 0.2,
+        scale_variation_wave1: tuple[float, float] = (0.8, 1.2),
+        scale_variation_wave2: tuple[float, float] = (0.8, 1.2),
     ) -> int:
         """Generate grass point positions.
 
@@ -335,8 +335,8 @@ class GrassGenerator:
             seed: random seed for reproducibility
             height: base y height for all points
             random_rotation: randomize initial rotation
-            scale_variation_wave1: scale variation for uniform distribution (0-1)
-            scale_variation_wave2: scale variation for obstacle-adjacent grass (0-1)
+            scale_variation_wave1: (min_scale, max_scale) for uniform distribution
+            scale_variation_wave2: (min_scale, max_scale) for obstacle-adjacent grass
 
         Returns:
             actual number of points generated
@@ -355,14 +355,14 @@ class GrassGenerator:
             # use clustered point generation (wave 2)
             print(f"using clustered point generation ({len(self.terrain.obstacles)} obstacles)")
             points = self._generate_clustered_points(count, seed)
-            scale_variation = scale_variation_wave2
-            print(f"using wave 2 scale variation: {scale_variation}")
+            scale_range = scale_variation_wave2
+            print(f"using wave 2 scale range: {scale_range[0]} to {scale_range[1]}")
         else:
             # fall back to uniform random distribution (wave 1)
             print("using uniform point generation (no obstacles)")
             points = self._generate_uniform_points(count, rng)
-            scale_variation = scale_variation_wave1
-            print(f"using wave 1 scale variation: {scale_variation}")
+            scale_range = scale_variation_wave1
+            print(f"using wave 1 scale range: {scale_range[0]} to {scale_range[1]}")
 
         # convert to grass points with wind orientation
         self._grass_points = []
@@ -378,8 +378,8 @@ class GrassGenerator:
             # random rotation for variety
             base_rotation = rng.uniform(0, 360) if random_rotation else 0
 
-            # random scale using the appropriate wave's variation
-            scale = 1.0 + rng.uniform(-scale_variation, scale_variation)
+            # random scale using the appropriate wave's range
+            scale = rng.uniform(scale_range[0], scale_range[1])
 
             self._grass_points.append(
                 GrassPoint(
