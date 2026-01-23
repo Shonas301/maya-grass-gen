@@ -50,14 +50,58 @@ global proc install() {
 
     fclose $fileId;
 
+    // create shelf button directly (don't rely on userSetup.py)
+    // get top shelf layout
+    global string $gShelfTopLevel;
+    string $shelves[] = `tabLayout -q -childArray $gShelfTopLevel`;
+    string $shelfName = "Custom";
+
+    // create Custom shelf if it doesn't exist
+    int $shelfExists = 0;
+    for ($shelf in $shelves) {
+        if ($shelf == $shelfName) {
+            $shelfExists = 1;
+            break;
+        }
+    }
+    if (!$shelfExists) {
+        shelfLayout -parent $gShelfTopLevel $shelfName;
+    }
+
+    // check if button already exists
+    string $shelfButtons[] = `shelfLayout -q -childArray $shelfName`;
+    int $buttonExists = 0;
+    for ($btn in $shelfButtons) {
+        if (`shelfButton -exists $btn`) {
+            string $ann = `shelfButton -q -annotation $btn`;
+            if ($ann == "Open Grass Generator UI") {
+                $buttonExists = 1;
+                break;
+            }
+        }
+    }
+
+    // add button if it doesn't exist
+    if (!$buttonExists) {
+        shelfButton
+            -parent $shelfName
+            -annotation "Open Grass Generator UI"
+            -image1 "commandButton.png"
+            -command "from maya_grass_gen import show_grass_ui; show_grass_ui()"
+            -sourceType "python";
+        print "Shelf button added to 'Custom' shelf.\n";
+    }
+
     // print success message
     print "===========================================\n";
     print "Maya Grass Plugin installed successfully!\n";
     print ("Module path: " + $modulePath + "\n");
     print ("Mod file: " + $modFile + "\n");
     print "\n";
-    print "Please restart Maya to complete installation.\n";
-    print "After restart, run:\n";
+    print "The 'Grass Generator' button has been added to the Custom shelf.\n";
+    print "Restart Maya, then click the shelf button to open the UI.\n";
+    print "\n";
+    print "Or run manually:\n";
     print "    from maya_grass_gen import show_grass_ui\n";
     print "    show_grass_ui()\n";
     print "===========================================\n";
