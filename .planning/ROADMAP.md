@@ -22,6 +22,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 77: Integration Testing** - End-to-end workflow testing
 - [ ] **Phase 78: Documentation and Polish** - Usage documentation and edge case handling
 - [ ] **Phase 79: Obstacle Proximity Density** - Higher grass density near objects (foot traffic avoidance effect)
+- [ ] **Phase 80: UI and Deployment** - User interface and Maya plugin packaging
 
 ## Phase Details
 
@@ -198,6 +199,25 @@ Plans:
 
 ---
 
+### Phase 80: UI and Deployment
+**Goal**: Create user interface for generate_grass() parameters and establish Maya plugin packaging/distribution workflow
+**Depends on**: Phase 73
+**Requirements**: REQ-008
+**Success Criteria** (what must be TRUE):
+  1. Maya UI panel/window exposes key generate_grass() parameters
+  2. Parameters have reasonable defaults and max value constraints
+  3. Plugin follows Maya module packaging conventions (.mod file, scripts folder)
+  4. Installation process documented (drag-and-drop or userSetup.py)
+  5. Plugin loads correctly from Maya's module paths
+**Plans**: 3 plans
+
+Plans:
+- [ ] 80-01-PLAN.md — Create UI window module with parameter controls and optionVar persistence
+- [ ] 80-02-PLAN.md — Create module packaging structure and drag-and-drop installer
+- [ ] 80-03-PLAN.md — Verify UI and installation workflow in Maya (checkpoint)
+
+---
+
 ## Progress
 
 **Execution Order:**
@@ -215,6 +235,7 @@ Phases execute in dependency order: 70 -> 71 -> 72 -> 73 -> 74 -> **79** -> 75 -
 | 77. Integration Testing | 0/2 | Not started | - |
 | 78. Documentation and Polish | 0/2 | Not started | - |
 | 79. Obstacle Proximity Density | 0/1 | Not started | - |
+| 80. UI and Deployment | 0/3 | Not started | - |
 
 ---
 
@@ -229,6 +250,7 @@ Phases execute in dependency order: 70 -> 71 -> 72 -> 73 -> 74 -> **79** -> 75 -
 | REQ-005 | 75, 77 | Verify viewport animation |
 | REQ-006 | 76, 77 | Verify render animation |
 | REQ-007 | 79 | Obstacle proximity density (foot traffic effect) |
+| REQ-008 | 80 | User interface and plugin deployment |
 
 ---
 
@@ -245,3 +267,4 @@ Phases execute in dependency order: 70 -> 71 -> 72 -> 73 -> 74 -> **79** -> 75 -
 *Phase 74 completed: 2026-01-20*
 *Phase 79 planned: 2026-01-20*
 *Phase 71 completed: 2026-01-22*
+*Phase 80 planned: 2026-01-25*
