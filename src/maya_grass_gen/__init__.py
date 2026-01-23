@@ -21,7 +21,9 @@ Quick Start:
         scale_variation_wave2=(0.6, 1.0),  # smaller grass near obstacles
     )
 
-    # the returned network name can be used for further manipulation
+    # or use the graphical interface:
+    from maya_grass_gen import show_grass_ui
+    show_grass_ui()
 
 Advanced Usage:
     # for fine control, use the class-based API directly
@@ -43,6 +45,7 @@ Features:
 
 from maya_grass_gen.generator import GrassGenerator
 from maya_grass_gen.terrain import TerrainAnalyzer
+from maya_grass_gen.ui import show_grass_ui
 from maya_grass_gen.wind import WindField
 
 __all__ = [
@@ -50,6 +53,7 @@ __all__ = [
     "TerrainAnalyzer",
     "WindField",
     "generate_grass",
+    "show_grass_ui",
 ]
 
 
