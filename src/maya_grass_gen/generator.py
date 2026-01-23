@@ -649,16 +649,65 @@ class GrassGenerator:
         try:
             # add distribute node set to mesh distribution mode
             distribute = mash_network.addNode("MASH_Distribute")
+
+            # === DEBUG: inspect the mash_network object ===
+            print(f"\n{'='*60}")
+            print("DEBUG: mash_network object inspection")
+            print(f"  type: {type(mash_network)}")
+            print(f"  dir: {[x for x in dir(mash_network) if not x.startswith('_')]}")
+            if hasattr(mash_network, 'name'):
+                print(f"  .name: {mash_network.name}")
+            if hasattr(mash_network, 'getNetworkName'):
+                print(f"  .getNetworkName(): {mash_network.getNetworkName()}")
+            if hasattr(mash_network, 'waiter'):
+                print(f"  .waiter: {mash_network.waiter}")
+
+            # === DEBUG: inspect the distribute node wrapper ===
+            print(f"\nDEBUG: distribute node wrapper inspection")
+            print(f"  type: {type(distribute)}")
+            print(f"  repr: {repr(distribute)}")
+            print(f"  str: {str(distribute)}")
+            print(f"  dir: {[x for x in dir(distribute) if not x.startswith('_')]}")
+            if hasattr(distribute, 'name'):
+                print(f"  .name: {distribute.name}")
+            if hasattr(distribute, 'getNodeName'):
+                print(f"  .getNodeName(): {distribute.getNodeName()}")
+            if hasattr(distribute, 'node'):
+                print(f"  .node: {distribute.node}")
+
+            # === DEBUG: list all MASH nodes in scene ===
+            print(f"\nDEBUG: all MASH nodes in scene")
+            all_mash_nodes = cmds.ls("*MASH*") or []
+            print(f"  all *MASH* nodes: {all_mash_nodes}")
+            all_distributes = cmds.ls(type="MASH_Distribute") or []
+            print(f"  MASH_Distribute nodes: {all_distributes}")
+
+            # === DEBUG: check what nodes match our network name ===
+            print(f"\nDEBUG: nodes matching network '{network_name}'")
+            matching = cmds.ls(f"{network_name}*") or []
+            print(f"  {network_name}* nodes: {matching}")
+            print(f"{'='*60}\n")
+
             distribute_name = self._get_mash_node_name(distribute, "Distribute", network_name)
-            print(f"added MASH node: {distribute_name}")
+            print(f"resolved distribute node name: {distribute_name}")
 
             # verify node exists before setting attributes
             if not cmds.objExists(distribute_name):
-                # list all MASH_Distribute nodes for debugging
-                all_distributes = cmds.ls(type="MASH_Distribute") or []
-                print(f"  WARNING: node '{distribute_name}' not found!")
-                print(f"  available MASH_Distribute nodes: {all_distributes}")
+                print(f"  ERROR: node '{distribute_name}' does not exist!")
+                print(f"  cmds.objExists('{distribute_name}'): {cmds.objExists(distribute_name)}")
+                # try without the attribute
+                base_name = distribute_name.split('.')[0]
+                print(f"  cmds.objExists('{base_name}'): {cmds.objExists(base_name)}")
+                if cmds.objExists(base_name):
+                    attrs = cmds.listAttr(base_name) or []
+                    print(f"  attributes on {base_name}: {[a for a in attrs if 'distrib' in a.lower()]}")
                 raise RuntimeError(f"MASH distribute node '{distribute_name}' does not exist")
+
+            # list attributes containing 'distribution' to verify the right attr name
+            print(f"checking attributes on {distribute_name}...")
+            all_attrs = cmds.listAttr(distribute_name) or []
+            dist_attrs = [a for a in all_attrs if 'distrib' in a.lower()]
+            print(f"  distribution-related attrs: {dist_attrs}")
 
             # distribution mode 4 = mesh
             cmds.setAttr(f"{distribute_name}.distribution", 4)
