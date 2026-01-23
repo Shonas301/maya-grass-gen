@@ -17,7 +17,8 @@ Quick Start:
         'grassBlade_geo',
         count=10000,
         wind_strength=3.0,
-        scale_variation=(0.7, 1.3),
+        scale_variation_wave1=(0.7, 1.3),
+        scale_variation_wave2=(0.6, 1.0),  # smaller grass near obstacles
     )
 
     # the returned network name can be used for further manipulation
@@ -89,16 +90,43 @@ def _validate_mesh_exists(mesh_name: str, description: str) -> None:
         raise RuntimeError(msg)
 
 
+def _validate_scale_variation(
+    scale_variation: tuple[float, float],
+    param_name: str,
+) -> None:
+    """Validate a scale variation tuple.
+
+    Args:
+        scale_variation: (min_scale, max_scale) tuple
+        param_name: parameter name for error messages
+
+    Raises:
+        ValueError: if scale values are invalid
+    """
+    min_scale, max_scale = scale_variation
+    if min_scale <= 0:
+        msg = f"{param_name} min_scale must be positive, got {min_scale}"
+        raise ValueError(msg)
+    if max_scale <= 0:
+        msg = f"{param_name} max_scale must be positive, got {max_scale}"
+        raise ValueError(msg)
+    if min_scale > max_scale:
+        msg = f"{param_name} min_scale ({min_scale}) cannot be greater than max_scale ({max_scale})"
+        raise ValueError(msg)
+
+
 def _validate_params(
     count: int,
-    scale_variation: tuple[float, float],
+    scale_variation_wave1: tuple[float, float],
+    scale_variation_wave2: tuple[float, float],
     proximity_density_boost: float,
 ) -> None:
     """Validate parameter values.
 
     Args:
         count: number of grass blades
-        scale_variation: (min_scale, max_scale) tuple
+        scale_variation_wave1: (min_scale, max_scale) for uniform distribution
+        scale_variation_wave2: (min_scale, max_scale) for obstacle-adjacent grass
         proximity_density_boost: density multiplier near obstacles
 
     Raises:
@@ -110,16 +138,8 @@ def _validate_params(
         msg = f"count must be positive, got {count}"
         raise ValueError(msg)
 
-    min_scale, max_scale = scale_variation
-    if min_scale <= 0:
-        msg = f"min_scale must be positive, got {min_scale}"
-        raise ValueError(msg)
-    if max_scale <= 0:
-        msg = f"max_scale must be positive, got {max_scale}"
-        raise ValueError(msg)
-    if min_scale > max_scale:
-        msg = f"min_scale ({min_scale}) cannot be greater than max_scale ({max_scale})"
-        raise ValueError(msg)
+    _validate_scale_variation(scale_variation_wave1, "scale_variation_wave1")
+    _validate_scale_variation(scale_variation_wave2, "scale_variation_wave2")
 
     if proximity_density_boost < 1.0:
         msg = f"proximity_density_boost must be >= 1.0, got {proximity_density_boost}"
@@ -153,7 +173,8 @@ def generate_grass(
     grass_geometry: str,
     count: int = 5000,
     wind_strength: float = 2.5,
-    scale_variation: tuple[float, float] = (0.8, 1.2),
+    scale_variation_wave1: tuple[float, float] = (0.8, 1.2),
+    scale_variation_wave2: tuple[float, float] = (0.8, 1.2),
     seed: int = 42,
     noise_scale: float = 0.004,
     octaves: int = 4,  # noqa: ARG001 - reserved for future use
@@ -167,13 +188,21 @@ def generate_grass(
     with wind animation. Uses opensimplex noise for organic wind patterns
     that flow around obstacles.
 
+    Grass is generated in two waves:
+        - Wave 1: base grass distributed uniformly across the terrain
+        - Wave 2: additional grass clustered around obstacles (when present)
+
+    Each wave can have independent scale variation for artistic control.
+
     Args:
         terrain_mesh: name of maya mesh to distribute grass on
         grass_geometry: name of grass blade geometry to instance
         count: number of grass blades to generate (default: 5000)
         wind_strength: magnitude of wind effect (default: 2.5)
-        scale_variation: (min_scale, max_scale) for blade size variation
-            (default: (0.8, 1.2))
+        scale_variation_wave1: (min_scale, max_scale) for wave 1 (uniform
+            distribution) blade size variation (default: (0.8, 1.2))
+        scale_variation_wave2: (min_scale, max_scale) for wave 2 (obstacle-
+            adjacent) blade size variation (default: (0.8, 1.2))
         seed: random seed for deterministic results (default: 42)
         noise_scale: how fine/coarse the wind pattern is (default: 0.004)
         octaves: number of noise octaves for wind (default: 4)
@@ -191,7 +220,7 @@ def generate_grass(
         RuntimeError: if terrain_mesh or grass_geometry not found in scene
         RuntimeError: if geometry has no faces (invalid mesh)
         ValueError: if count is zero or negative
-        ValueError: if scale_variation has invalid values
+        ValueError: if scale_variation_wave1 or scale_variation_wave2 has invalid values
 
     Example:
         >>> from maya_grass import generate_grass
@@ -209,7 +238,8 @@ def generate_grass(
     print(f"  grass_geometry: {grass_geometry}")
     print(f"  count: {count}")
     print(f"  wind_strength: {wind_strength}")
-    print(f"  scale_variation: {scale_variation}")
+    print(f"  scale_variation_wave1: {scale_variation_wave1}")
+    print(f"  scale_variation_wave2: {scale_variation_wave2}")
     print(f"  seed: {seed}")
     print(f"  noise_scale: {noise_scale}")
     print(f"  octaves: {octaves}")
@@ -220,7 +250,7 @@ def generate_grass(
     # validate inputs before doing any work
     _validate_mesh_exists(terrain_mesh, "Terrain mesh")
     _validate_mesh_exists(grass_geometry, "Grass geometry")
-    _validate_params(count, scale_variation, proximity_density_boost)
+    _validate_params(count, scale_variation_wave1, scale_variation_wave2, proximity_density_boost)
 
     # initialize noise with seed for deterministic results
     from maya_grass_gen.noise_utils import init_noise
@@ -259,11 +289,17 @@ def generate_grass(
     )
 
     # calculate scale_variation for generate_points
-    # generate_points expects a single variation value (0-1 range)
-    scale_var = (scale_variation[1] - scale_variation[0]) / 2
+    # generate_points expects variation values (0-1 range)
+    scale_var_wave1 = (scale_variation_wave1[1] - scale_variation_wave1[0]) / 2
+    scale_var_wave2 = (scale_variation_wave2[1] - scale_variation_wave2[0]) / 2
 
     # generate grass points
-    point_count = generator.generate_points(count=count, seed=seed, scale_variation=scale_var)
+    point_count = generator.generate_points(
+        count=count,
+        seed=seed,
+        scale_variation_wave1=scale_var_wave1,
+        scale_variation_wave2=scale_var_wave2,
+    )
     print(f"generated {point_count} grass points")
 
     # create unique MASH network name if not provided
