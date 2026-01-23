@@ -685,14 +685,21 @@ class GrassGenerator:
 
             print(f"using python node: {python_node_name}")
 
-            # verify pythonCode attr exists
+            # debug: inspect the python node thoroughly
             if cmds.objExists(python_node_name):
+                node_type = cmds.nodeType(python_node_name)
+                print(f"  node type: {node_type}")
                 attrs = cmds.listAttr(python_node_name) or []
+                print(f"  total attrs: {len(attrs)}")
+                print(f"  first 20 attrs: {attrs[:20]}")
                 has_python_code = "pythonCode" in attrs
                 print(f"  pythonCode attr exists: {has_python_code}")
                 if not has_python_code:
-                    python_attrs = [a for a in attrs if "python" in a.lower()]
-                    print(f"  python-related attrs: {python_attrs}")
+                    # look for any attr with 'code', 'script', or 'python'
+                    code_attrs = [a for a in attrs if any(k in a.lower() for k in ['code', 'script', 'python'])]
+                    print(f"  code/script/python attrs: {code_attrs}")
+            else:
+                print(f"  ERROR: node {python_node_name} does not exist!")
 
             # generate wind expression that updates with time
             wind_code = self._generate_wind_python_code()
