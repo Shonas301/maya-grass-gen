@@ -1,0 +1,50 @@
+// maya grass plugin installer
+// drag this file into maya viewport to install
+
+global proc install() {
+    // get this script's location
+    string $scriptLocation = `whatIs "install"`;
+    string $tokens[];
+    tokenize($scriptLocation, "\"", $tokens);
+    string $scriptPath = $tokens[1];
+
+    // get module root (parent directory of this script)
+    string $modulePath = dirname($scriptPath);
+
+    // get maya modules directory
+    string $modulesDir = `internalVar -userAppDir` + "modules/";
+
+    // create modules directory if it doesn't exist
+    if (!`filetest -d $modulesDir`) {
+        sysFile -makeDir $modulesDir;
+    }
+
+    // create .mod file pointing to our module location
+    string $modFile = $modulesDir + "maya_grass_plugin.mod";
+    int $fileId = `fopen $modFile "w"`;
+
+    // write module descriptor with all supported maya versions
+    fprint $fileId ("+ MAYAVERSION:2022 maya_grass_plugin 1.0 " + $modulePath + "\n");
+    fprint $fileId ("+ MAYAVERSION:2023 maya_grass_plugin 1.0 " + $modulePath + "\n");
+    fprint $fileId ("+ MAYAVERSION:2024 maya_grass_plugin 1.0 " + $modulePath + "\n");
+    fprint $fileId ("+ MAYAVERSION:2025 maya_grass_plugin 1.0 " + $modulePath + "\n");
+    fprint $fileId "icons: icons\n";
+    fprint $fileId "scripts: scripts\n";
+    fprint $fileId "PYTHONPATH +:= scripts\n";
+
+    fclose $fileId;
+
+    // print success message
+    print "===========================================\n";
+    print "Maya Grass Plugin installed successfully!\n";
+    print ("Module path: " + $modulePath + "\n");
+    print ("Mod file: " + $modFile + "\n");
+    print "\n";
+    print "Please restart Maya to complete installation.\n";
+    print "After restart, run:\n";
+    print "    from maya_grass_gen import show_grass_ui\n";
+    print "    show_grass_ui()\n";
+    print "===========================================\n";
+}
+
+install();
