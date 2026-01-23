@@ -577,6 +577,14 @@ class TerrainAnalyzer:
             ):
                 continue
 
+            # check if object is floating above the terrain (not intersecting in Y)
+            # allow some tolerance for objects sitting on terrain
+            height_tolerance = 50.0  # units above terrain max_y
+            if obj_min_y > self._bounds.max_y + height_tolerance:
+                print(f"  skipping {short_name}: floating above terrain "
+                      f"(min_y={obj_min_y:.1f} > terrain max_y={self._bounds.max_y:.1f})")
+                continue
+
             # calculate center and radius from bounding box
             center_x = (obj_min_x + obj_max_x) / 2
             center_z = (obj_min_z + obj_max_z) / 2
