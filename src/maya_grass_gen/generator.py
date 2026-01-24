@@ -743,6 +743,7 @@ class GrassGenerator:
                 "x": obs.center_x,
                 "z": obs.center_z,
                 "radius": obs.radius,
+                "inner_radius_sq": (obs.radius * 0.85) ** 2,
                 "radius_sq": obs.radius * obs.radius,
                 "influence": obs.radius * 2.5,
             }
@@ -770,12 +771,23 @@ time_scale = {self.wind.time_scale}
 obstacles = {obstacles_data}
 
 def is_inside_obstacle(x, z):
-    """check if point is inside any obstacle radius (squared distance)."""
+    """check if point is inside obstacle with fuzzy edge boundary."""
     for obs in obstacles:
         dx = x - obs["x"]
         dz = z - obs["z"]
-        if dx*dx + dz*dz < obs["radius_sq"]:
+        dist_sq = dx*dx + dz*dz
+        # hard exclusion at 85% radius
+        if dist_sq < obs["inner_radius_sq"]:
             return True
+        # fuzzy zone between 85%-100% uses angular noise
+        if dist_sq < obs["radius_sq"]:
+            angle = math.atan2(dz, dx)
+            noise = math.sin(angle * 7.0 + obs["x"] * 0.1) * 0.5 + 0.5
+            dist = math.sqrt(dist_sq)
+            inner_r = math.sqrt(obs["inner_radius_sq"])
+            t = (dist - inner_r) / (obs["radius"] - inner_r)
+            if t < noise * 0.6:
+                return True
     return False
 
 def get_obstacle_deflection(x, z, obs):
@@ -872,6 +884,7 @@ md.setData()
                 "x": obs.center_x,
                 "z": obs.center_z,
                 "radius": obs.radius,
+                "inner_radius_sq": (obs.radius * 0.85) ** 2,
                 "radius_sq": obs.radius * obs.radius,
                 "influence": obs.radius * 2.5,
             }
@@ -899,12 +912,23 @@ time_scale = {self.wind.time_scale}
 obstacles = {obstacles_data}
 
 def is_inside_obstacle(x, z):
-    """check if point is inside any obstacle radius (squared distance)."""
+    """check if point is inside obstacle with fuzzy edge boundary."""
     for obs in obstacles:
         dx = x - obs["x"]
         dz = z - obs["z"]
-        if dx*dx + dz*dz < obs["radius_sq"]:
+        dist_sq = dx*dx + dz*dz
+        # hard exclusion at 85% radius
+        if dist_sq < obs["inner_radius_sq"]:
             return True
+        # fuzzy zone between 85%-100% uses angular noise
+        if dist_sq < obs["radius_sq"]:
+            angle = math.atan2(dz, dx)
+            noise = math.sin(angle * 7.0 + obs["x"] * 0.1) * 0.5 + 0.5
+            dist = math.sqrt(dist_sq)
+            inner_r = math.sqrt(obs["inner_radius_sq"])
+            t = (dist - inner_r) / (obs["radius"] - inner_r)
+            if t < noise * 0.6:
+                return True
     return False
 
 def get_obstacle_deflection(x, z, obs):
