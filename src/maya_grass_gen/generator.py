@@ -597,39 +597,61 @@ class GrassGenerator:
         # force scene to evaluate so new nodes are visible
         cmds.refresh(force=True)
 
-        # try getNodeName() method (MASH API)
-        if hasattr(node_wrapper, 'getNodeName'):
-            name = node_wrapper.getNodeName()
-            if name and cmds.objExists(name):
-                return name
+        print(f"_get_mash_node_name: resolving {node_type} node, network={network_name}")
+        print(f"  wrapper type: {type(node_wrapper)}")
+        print(f"  wrapper dir: {[a for a in dir(node_wrapper) if not a.startswith('_')]}")
 
-        # try .name property
-        if hasattr(node_wrapper, 'name'):
-            name = node_wrapper.name
-            if name and cmds.objExists(name):
-                return name
-
-        # try string conversion (some MASH wrappers support this)
-        try:
-            name = str(node_wrapper)
-            if name and cmds.objExists(name):
-                return name
-        except (TypeError, ValueError):
-            pass
-
-        # try finding by type pattern, filtered by network name if provided
+        # prefer finding by type - this is most reliable for MASH nodes
+        # the wrapper methods often return names that don't match the actual DG node
         pattern = f"*MASH_{node_type}*"
         matches = cmds.ls(pattern, type=f"MASH_{node_type}") or []
+        print(f"  ls pattern '{pattern}' type 'MASH_{node_type}': {matches}")
 
         # filter to only nodes that match our network name prefix
         if network_name and matches:
             filtered = [m for m in matches if m.startswith(network_name)]
+            print(f"  filtered by prefix '{network_name}': {filtered}")
             if filtered:
                 matches = filtered
 
         if matches:
             # return most recently created (last in list)
-            return matches[-1]
+            result = matches[-1]
+            print(f"  returning from type search: {result}")
+            return result
+
+        # fallback: try getNodeName() method (MASH API)
+        if hasattr(node_wrapper, 'getNodeName'):
+            name = node_wrapper.getNodeName()
+            print(f"  getNodeName() returned: {name}")
+            if name and cmds.objExists(name):
+                # verify it's actually a MASH node with the expected type
+                node_type_check = cmds.nodeType(name)
+                print(f"  nodeType of '{name}': {node_type_check}")
+                if node_type_check == f"MASH_{node_type}":
+                    return name
+
+        # fallback: try .name property
+        if hasattr(node_wrapper, 'name'):
+            name = node_wrapper.name
+            print(f"  .name property: {name}")
+            if name and cmds.objExists(name):
+                node_type_check = cmds.nodeType(name)
+                print(f"  nodeType of '{name}': {node_type_check}")
+                if node_type_check == f"MASH_{node_type}":
+                    return name
+
+        # fallback: try string conversion
+        try:
+            name = str(node_wrapper)
+            print(f"  str() conversion: {name}")
+            if name and cmds.objExists(name):
+                node_type_check = cmds.nodeType(name)
+                print(f"  nodeType of '{name}': {node_type_check}")
+                if node_type_check == f"MASH_{node_type}":
+                    return name
+        except (TypeError, ValueError):
+            pass
 
         msg = f"could not resolve MASH {node_type} node name from wrapper"
         raise RuntimeError(msg)
