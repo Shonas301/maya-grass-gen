@@ -416,10 +416,14 @@ class PointClusterer:
         Returns:
             list of (x, y) point positions
         """
+        # oversample grid to compensate for density-based rejection
+        max_density = 1.0 + (self.config.obstacle_density_multiplier - 1.0)
+        effective_num_points = int(num_points * max_density) if self.obstacles else num_points
+
         # calculate grid dimensions to get approximately num_points
         aspect_ratio = self.width / self.height
-        grid_rows = int(np.sqrt(num_points / aspect_ratio))
-        grid_cols = int(num_points / grid_rows)
+        grid_rows = int(np.sqrt(effective_num_points / aspect_ratio))
+        grid_cols = int(effective_num_points / grid_rows)
 
         # cell size
         cell_width = self.width / grid_cols
@@ -461,10 +465,16 @@ class PointClusterer:
                 px = max(0, min(self.width - 1, px))
                 py = max(0, min(self.height - 1, py))
 
-                # check not inside obstacle
+                # density-based rejection sampling: accept points probabilistically
+                # based on density value, not just binary obstacle check.
+                # this creates a smooth gradient near obstacles instead of a hard ring.
                 phase1_total += 1
                 density = self.get_density_at(px, py)
-                if density > 0:
+                if density <= 0:
+                    phase1_rejected += 1
+                    continue
+                acceptance_prob = density / max_density
+                if self.rng.uniform(0, 1) < acceptance_prob:
                     points.append((px, py))
                 else:
                     phase1_rejected += 1
@@ -474,10 +484,14 @@ class PointClusterer:
         # phase 2: add extra points clustered around obstacle edges
         phase2_added = 0
         if self.obstacles:
-            # calculate how many extra points to add based on multiplier
+            # phase 2 supplements the density gradient from phase 1 with
+            # a modest number of extra points. heavily reduced because phase 1
+            # now handles density-based acceptance (previously it was a binary
+            # check, so phase 2 had to do all the clustering work).
             extra_ratio = self.config.obstacle_density_multiplier - 1.0
-            extra_points_per_obstacle = int(
-                (num_points * extra_ratio) / (len(self.obstacles) * 3)
+            extra_points_per_obstacle = min(
+                int((num_points * extra_ratio) / (len(self.obstacles) * 20)),
+                int(num_points * 0.02),  # cap at 2% of target per obstacle
             )
             print(f"Phase 2: attempting {extra_points_per_obstacle} extra points per obstacle ({len(self.obstacles)} obstacles)")
 
@@ -485,9 +499,9 @@ class PointClusterer:
                 # influence_radius is guaranteed to be set by __post_init__
                 assert obstacle.influence_radius is not None
 
-                # add points in rings around the obstacle edge
-                inner_radius = obstacle.radius + self.config.edge_offset * 0.5
-                outer_radius = obstacle.radius + obstacle.influence_radius * 0.4
+                # wider band than before to avoid visible ring artifact
+                inner_radius = obstacle.radius + self.config.edge_offset * 0.3
+                outer_radius = obstacle.radius + obstacle.influence_radius * 0.7
 
                 for _ in range(extra_points_per_obstacle):
                     # random angle
@@ -515,6 +529,18 @@ class PointClusterer:
             print(f"Phase 2: added {phase2_added} extra points around obstacles")
 
         print(f"Total points generated: {len(points)} (target was {num_points})")
+
+        # density diagnostics: sample density at generated points to validate gradient
+        if points and self.obstacles:
+            sample_size = min(len(points), 200)
+            sample_indices = self.rng.choice(len(points), sample_size, replace=False)
+            densities = [self.get_density_at(points[i][0], points[i][1]) for i in sample_indices]
+            print(f"[density diagnostics] sampled {sample_size} points: "
+                  f"min={min(densities):.3f}, max={max(densities):.3f}, "
+                  f"mean={sum(densities)/len(densities):.3f}, "
+                  f"rejection_rate={phase1_rejected}/{phase1_total} "
+                  f"({phase1_rejected/max(phase1_total,1)*100:.1f}%)")
+
         return points
 
 

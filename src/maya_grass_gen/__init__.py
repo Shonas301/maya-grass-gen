@@ -376,17 +376,13 @@ def generate_grass(
     if network_name is None:
         network_name = _get_unique_network_name()
 
-    # determine which scale range to use based on obstacles
-    # (matches logic in generate_points)
-    scale_range = scale_variation_wave2 if obstacle_count > 0 else scale_variation_wave1
-
     # create MASH network with mesh distribution
+    # (scale is set per-point in the Python node from GrassPoint.scale values)
     generator.create_mash_network(
         grass_geometry,
         network_name,
         distribute_on_mesh=True,
         terrain_mesh=terrain_mesh,
-        scale_range=scale_range,
     )
     print(f"created MASH network: {network_name}")
 

@@ -217,6 +217,7 @@ def show_grass_ui() -> None:
         buttonLabel="Set Selected",
         buttonCommand=functools.partial(set_selected_mesh, "terrain_field"),
         columnWidth3=(100, 200, 100),
+        annotation="The ground mesh to scatter grass onto. Select a mesh and click 'Set Selected'.",
     )
 
     cmds.textFieldButtonGrp(
@@ -226,6 +227,7 @@ def show_grass_ui() -> None:
         buttonLabel="Set Selected",
         buttonCommand=functools.partial(set_selected_mesh, "grass_field"),
         columnWidth3=(100, 200, 100),
+        annotation="The grass blade mesh to instance. Select your grass geometry and click 'Set Selected'.",
     )
 
     cmds.setParent('..')  # exit columnLayout
@@ -245,6 +247,7 @@ def show_grass_ui() -> None:
         fieldMaxValue=100000,
         value=load_pref("count", 5000),
         columnWidth3=(100, 50, 250),
+        annotation="Total number of grass blades to generate. Higher values give denser coverage but take longer.",
     )
 
     cmds.floatSliderGrp(
@@ -258,6 +261,7 @@ def show_grass_ui() -> None:
         value=load_pref("wind", 2.5),
         precision=1,
         columnWidth3=(100, 50, 250),
+        annotation="How strongly the wind pushes grass blades. 0 = no wind, 2.5 = moderate breeze, 10 = strong gusts.",
     )
 
     cmds.floatSliderGrp(
@@ -269,6 +273,7 @@ def show_grass_ui() -> None:
         value=load_pref("scale_min_w1", 0.8),
         precision=2,
         columnWidth3=(130, 50, 220),
+        annotation="Minimum scale for grass in open areas (away from obstacles). Lower = smaller blades.",
     )
 
     cmds.floatSliderGrp(
@@ -280,6 +285,7 @@ def show_grass_ui() -> None:
         value=load_pref("scale_max_w1", 1.2),
         precision=2,
         columnWidth3=(130, 50, 220),
+        annotation="Maximum scale for grass in open areas (away from obstacles). Higher = larger blades.",
     )
 
     cmds.floatSliderGrp(
@@ -291,6 +297,7 @@ def show_grass_ui() -> None:
         value=load_pref("scale_min_w2", 0.8),
         precision=2,
         columnWidth3=(130, 50, 220),
+        annotation="Minimum scale for grass near obstacles. Use smaller values for shorter grass around objects.",
     )
 
     cmds.floatSliderGrp(
@@ -302,6 +309,7 @@ def show_grass_ui() -> None:
         value=load_pref("scale_max_w2", 1.2),
         precision=2,
         columnWidth3=(130, 50, 220),
+        annotation="Maximum scale for grass near obstacles. Use smaller values for shorter grass around objects.",
     )
 
     cmds.floatSliderGrp(
@@ -313,6 +321,7 @@ def show_grass_ui() -> None:
         value=load_pref("proximity", 1.0),
         precision=1,
         columnWidth3=(120, 50, 230),
+        annotation="Density multiplier near obstacles. 1.0 = uniform density. Higher = more grass clustering around objects (foot traffic avoidance effect).",
     )
 
     cmds.intFieldGrp(
@@ -320,6 +329,7 @@ def show_grass_ui() -> None:
         label="Random Seed:",
         value1=load_pref("seed", 42),
         columnWidth2=(100, 100),
+        annotation="Seed for random number generation. Same seed = same grass layout. Change to get a different distribution.",
     )
 
     cmds.setParent('..')  # exit columnLayout
@@ -335,6 +345,7 @@ def show_grass_ui() -> None:
         value1=load_pref("noise", 0.004),
         precision=4,
         columnWidth2=(100, 100),
+        annotation="Spatial frequency of the wind noise pattern. Smaller = broader, smoother wind. Larger = more turbulent, localized gusts.",
     )
 
     cmds.floatFieldGrp(
@@ -343,6 +354,7 @@ def show_grass_ui() -> None:
         value1=load_pref("time", 0.008),
         precision=4,
         columnWidth2=(100, 100),
+        annotation="Speed of wind animation over time. Smaller = slow, gentle swaying. Larger = fast, jittery movement.",
     )
 
     cmds.intSliderGrp(
@@ -353,6 +365,7 @@ def show_grass_ui() -> None:
         maxValue=8,
         value=load_pref("octaves", 4),
         columnWidth3=(100, 50, 250),
+        annotation="Layers of noise detail in the wind pattern. More octaves = more fine detail but slower computation. 3-5 is typical.",
     )
 
     cmds.floatSliderGrp(
@@ -364,6 +377,7 @@ def show_grass_ui() -> None:
         value=load_pref("persistence", 0.5),
         precision=2,
         columnWidth3=(100, 50, 250),
+        annotation="How much each noise octave contributes. Lower = smoother wind. Higher = more chaotic, detailed turbulence.",
     )
 
     cmds.floatSliderGrp(
@@ -375,6 +389,7 @@ def show_grass_ui() -> None:
         value=load_pref("max_lean", 30.0),
         precision=1,
         columnWidth3=(100, 50, 250),
+        annotation="Maximum angle (degrees) that grass blades can lean in the wind. 30 = moderate lean, 60+ = very dramatic.",
     )
 
     cmds.floatSliderGrp(
@@ -386,6 +401,7 @@ def show_grass_ui() -> None:
         value=load_pref("min_distance", 5.0),
         precision=1,
         columnWidth3=(100, 50, 250),
+        annotation="Minimum spacing between grass blades (scene units). Prevents overlapping blades. Increase for sparser look.",
     )
 
     cmds.floatSliderGrp(
@@ -397,6 +413,7 @@ def show_grass_ui() -> None:
         value=load_pref("cluster_falloff", 0.5),
         precision=2,
         columnWidth3=(100, 50, 250),
+        annotation="How quickly grass density drops off away from obstacles. Lower = tighter clustering near edges. Higher = wider, softer gradient.",
     )
 
     cmds.floatSliderGrp(
@@ -408,6 +425,7 @@ def show_grass_ui() -> None:
         value=load_pref("edge_offset", 10.0),
         precision=1,
         columnWidth3=(100, 50, 250),
+        annotation="Distance from obstacle edge where grass density peaks (scene units). Controls how far from objects the densest grass ring appears.",
     )
 
     cmds.setParent('..')  # exit columnLayout
@@ -421,12 +439,14 @@ def show_grass_ui() -> None:
         backgroundColor=(0.3, 0.6, 0.3),
         command=lambda *args: execute_grass_generation(),
         height=35,
+        annotation="Generate grass on the terrain mesh with the current settings. Creates a MASH network with animated wind.",
     )
 
     cmds.button(
         label="Close",
         command=lambda *args: cmds.deleteUI(window),
         height=35,
+        annotation="Close this window. Settings are saved automatically.",
     )
 
     cmds.setParent('..')  # exit rowLayout
