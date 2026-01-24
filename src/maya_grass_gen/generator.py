@@ -403,6 +403,14 @@ class GrassGenerator:
                 )
             )
 
+        # scale diagnostics
+        if self._grass_points:
+            all_scales = [p.scale for p in self._grass_points]
+            print(f"[scale diagnostics] {len(all_scales)} points: "
+                  f"min={min(all_scales):.3f}, max={max(all_scales):.3f}, "
+                  f"mean={sum(all_scales)/len(all_scales):.3f}, "
+                  f"range=({scale_range[0]}, {scale_range[1]})")
+
         print(f"point generation complete: {len(self._grass_points)} points")
         return len(self._grass_points)
 
@@ -554,9 +562,10 @@ class GrassGenerator:
 
         if distribute_on_mesh:
             # use mesh surface distribution
+            # (scale is handled per-point in the Python node, not via scale_range)
             print("distribution mode: mesh")
             return self._create_mesh_distributed_network(
-                mash_network, terrain_mesh, network_name, scale_range
+                mash_network, terrain_mesh, network_name
             )
 
         print("distribution mode: point-based")
@@ -635,18 +644,17 @@ class GrassGenerator:
         mash_network: Any,
         terrain_mesh: str | None,
         network_name: str,
-        scale_range: tuple[float, float] | None = None,
     ) -> str:
         """Create MASH network with mesh surface distribution.
 
         Distributes grass instances directly on the terrain mesh surface,
-        respecting the mesh topology.
+        respecting the mesh topology. Scale is set per-point in the Python
+        node from pre-computed GrassPoint.scale values.
 
         Args:
             mash_network: MASH network object
             terrain_mesh: mesh to distribute on
             network_name: name of the network
-            scale_range: optional (min, max) scale tuple for random variation
 
         Returns:
             name of created network
@@ -665,38 +673,9 @@ class GrassGenerator:
             print(f"setting point count to {point_count}")
             mash_network.setPointCount(point_count)
 
-            # add random node for scale variation
-            # (python node handles positions/rotations, random node handles scale)
-            if scale_range:
-                random_node = mash_network.addNode("MASH_Random")
-                random_name = self._get_mash_node_name(random_node, "Random", network_name)
-                print(f"added MASH Random node: {random_name}")
-
-                scale_min, scale_max = scale_range
-                scale_center = (scale_min + scale_max) / 2
-                scale_variation = (scale_max - scale_min) / 2
-
-                # zero out position and rotation randomization (only want scale)
-                cmds.setAttr(f"{random_name}.positionX", 0)
-                cmds.setAttr(f"{random_name}.positionY", 0)
-                cmds.setAttr(f"{random_name}.positionZ", 0)
-                cmds.setAttr(f"{random_name}.rotationX", 0)
-                cmds.setAttr(f"{random_name}.rotationY", 0)
-                cmds.setAttr(f"{random_name}.rotationZ", 0)
-
-                cmds.setAttr(f"{random_name}.uniformRandom", True)
-                cmds.setAttr(f"{random_name}.scaleX", scale_variation)
-
-                if abs(scale_center - 1.0) > 0.01:
-                    offset_node = mash_network.addNode("MASH_Offset")
-                    offset_name = self._get_mash_node_name(offset_node, "Offset", network_name)
-                    print(f"added MASH Offset node: {offset_name} (scale center: {scale_center})")
-                    scale_offset = scale_center - 1.0
-                    cmds.setAttr(f"{offset_name}.scaleOffset0", scale_offset)
-                    cmds.setAttr(f"{offset_name}.scaleOffset1", scale_offset)
-                    cmds.setAttr(f"{offset_name}.scaleOffset2", scale_offset)
-
-                print(f"scale range configured: {scale_min} to {scale_max}")
+            # scale is handled per-point in the python node (not via MASH Random
+            # node, which was fragile and had no per-point control). the python
+            # node sets md.outScale[i] from pre-computed GrassPoint.scale values.
 
             # get waiter name for python node
             waiter_name = mash_network.waiter
@@ -747,7 +726,8 @@ class GrassGenerator:
         """Generate Python code for point-based distribution with animated wind.
 
         Uses pre-computed positions (for obstacle clustering) but calculates
-        wind-based rotation dynamically each frame for animation.
+        wind-based rotation dynamically each frame for animation. Sets per-point
+        scale via outScale and hides instances inside obstacles via outVisibility.
 
         Returns:
             Python code string for MASH Python node
@@ -757,12 +737,13 @@ class GrassGenerator:
         scales_data = [(p.scale, p.scale, p.scale) for p in self._grass_points]
         base_rotations = [p.rotation_y for p in self._grass_points]
 
-        # obstacle data for flow deflection
+        # obstacle data for flow deflection and visibility filtering
         obstacles_data = [
             {
                 "x": obs.center_x,
                 "z": obs.center_z,
                 "radius": obs.radius,
+                "radius_sq": obs.radius * obs.radius,
                 "influence": obs.radius * 2.5,
             }
             for obs in self.terrain.obstacles
@@ -770,6 +751,10 @@ class GrassGenerator:
 
         return f'''
 import math
+import openMASH
+
+md = openMASH.MASHData(thisNode)
+frame = md.getFrame()
 
 # pre-computed positions (clustered around obstacles)
 positions = {positions_data}
@@ -781,8 +766,17 @@ noise_scale = {self.wind.noise_scale}
 wind_strength = {self.wind.wind_strength}
 time_scale = {self.wind.time_scale}
 
-# obstacles for flow deflection
+# obstacles for flow deflection and visibility filtering
 obstacles = {obstacles_data}
+
+def is_inside_obstacle(x, z):
+    """check if point is inside any obstacle radius (squared distance)."""
+    for obs in obstacles:
+        dx = x - obs["x"]
+        dz = z - obs["z"]
+        if dx*dx + dz*dz < obs["radius_sq"]:
+            return True
+    return False
 
 def get_obstacle_deflection(x, z, obs):
     """calculate deflection from single obstacle."""
@@ -793,8 +787,8 @@ def get_obstacle_deflection(x, z, obs):
     if dist < obs["radius"]:
         if dist < 0.001:
             return (1.0, 0.0)
-        scale = wind_strength * 2 / dist
-        return (dx * scale, dz * scale)
+        s = wind_strength * 2 / dist
+        return (dx * s, dz * s)
 
     if dist > obs["influence"]:
         return (0.0, 0.0)
@@ -828,20 +822,32 @@ def get_wind_vector(x, z, time):
     return (vx, vz)
 
 # apply positions, scales, and animated wind rotation
-for i in range(min(len(positions), len(md.position))):
-    # set pre-computed position and scale
-    md.position[i] = positions[i]
-    md.scale[i] = scales[i]
+count = min(len(positions), md.count())
+hidden_count = 0
+for i in range(count):
+    md.outPosition[i] = positions[i]
+
+    x, y, z = positions[i]
+
+    # safety net: hide grass inside obstacles via visibility
+    if is_inside_obstacle(x, z):
+        md.outVisibility[i] = 0.0
+        hidden_count += 1
+        continue
+
+    md.outVisibility[i] = 1.0
+    md.outScale[i] = scales[i]
 
     # calculate animated wind rotation
-    x, y, z = positions[i]
     vx, vz = get_wind_vector(x, z, frame)
     wind_angle = math.atan2(vz, vx)
     magnitude = math.sqrt(vx*vx + vz*vz)
     lean_amount = min({self._max_lean_angle}, magnitude * 10)
 
     # combine base rotation with wind-based lean
-    md.rotation[i] = (lean_amount, base_rotations[i] + math.degrees(wind_angle) * 0.3, 0)
+    md.outRotation[i] = (lean_amount, base_rotations[i] + math.degrees(wind_angle) * 0.3, 0)
+
+md.setData()
 '''
 
     def _generate_wind_python_code(self) -> str:
@@ -850,19 +856,23 @@ for i in range(min(len(positions), len(md.position))):
         Creates expression that calculates wind-based rotation and lean
         for each grass instance based on its position. Uses pre-calculated
         obstacle-avoiding positions instead of MASH's random distribution.
+        Sets per-point scale from pre-computed GrassPoint.scale values.
+        Hides instances inside obstacles via outVisibility as a safety net.
 
         Returns:
             Python code string for MASH Python node
         """
-        # pre-computed obstacle-avoiding positions
+        # pre-computed obstacle-avoiding positions and scales
         positions_data = [(p.x, p.y, p.z) for p in self._grass_points]
+        scales_data = [(p.scale, p.scale, p.scale) for p in self._grass_points]
 
-        # include obstacle data for flow deflection
+        # include obstacle data for flow deflection and visibility filtering
         obstacles_data = [
             {
                 "x": obs.center_x,
                 "z": obs.center_z,
                 "radius": obs.radius,
+                "radius_sq": obs.radius * obs.radius,
                 "influence": obs.radius * 2.5,
             }
             for obs in self.terrain.obstacles
@@ -876,16 +886,26 @@ import openMASH
 md = openMASH.MASHData(thisNode)
 frame = md.getFrame()
 
-# pre-computed obstacle-avoiding positions
+# pre-computed obstacle-avoiding positions and per-point scales
 positions = {positions_data}
+scales = {scales_data}
 
 # wind parameters
 noise_scale = {self.wind.noise_scale}
 wind_strength = {self.wind.wind_strength}
 time_scale = {self.wind.time_scale}
 
-# obstacles for flow deflection
+# obstacles for flow deflection and visibility filtering
 obstacles = {obstacles_data}
+
+def is_inside_obstacle(x, z):
+    """check if point is inside any obstacle radius (squared distance)."""
+    for obs in obstacles:
+        dx = x - obs["x"]
+        dz = z - obs["z"]
+        if dx*dx + dz*dz < obs["radius_sq"]:
+            return True
+    return False
 
 def get_obstacle_deflection(x, z, obs):
     dx = x - obs["x"]
@@ -895,8 +915,8 @@ def get_obstacle_deflection(x, z, obs):
     if dist < obs["radius"]:
         if dist < 0.001:
             return (1.0, 0.0)
-        scale = wind_strength * 2 / dist
-        return (dx * scale, dz * scale)
+        s = wind_strength * 2 / dist
+        return (dx * s, dz * s)
 
     if dist > obs["influence"]:
         return (0.0, 0.0)
@@ -928,15 +948,29 @@ def get_wind_angle(x, z, time):
 
     return math.atan2(vz, vx)
 
-# apply pre-computed positions and wind animation
+# apply pre-computed positions, scales, and wind animation
 max_lean = {self._max_lean_angle}
 count = min(len(positions), md.count())
+hidden_count = 0
 for i in range(count):
     # override MASH position with our obstacle-avoiding position
     md.outPosition[i] = positions[i]
 
-    # apply wind animation (scale handled by MASH Random node)
     x, y, z = positions[i]
+
+    # safety net: hide grass inside obstacles via visibility
+    # (uses outVisibility not outScale to avoid conflicts)
+    if is_inside_obstacle(x, z):
+        md.outVisibility[i] = 0.0
+        hidden_count += 1
+        continue
+
+    md.outVisibility[i] = 1.0
+
+    # set per-point scale from pre-computed values
+    md.outScale[i] = scales[i]
+
+    # apply wind animation
     angle = get_wind_angle(x, z, frame)
     lean_amount = min(max_lean, 15 + 10 * abs(math.sin(angle)))
     md.outRotation[i] = (lean_amount, math.degrees(angle), 0)

@@ -705,7 +705,201 @@ class TestGrassGeneratorMeshDistribution:
         code = gen._generate_point_based_wind_code()
 
         # then
-        assert "md.position[i] = positions[i]" in code
+        assert "md.outPosition[i] = positions[i]" in code
+        assert "get_wind_vector" in code
         assert "wind_angle = math.atan2" in code
         assert "lean_amount" in code
         assert "obstacles" in code
+
+    def test_wind_python_code_has_per_point_scale(self) -> None:
+        """test that mesh-distributed code sets md.outScale per-point."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=10, seed=42)
+
+        # when
+        code = gen._generate_wind_python_code()
+
+        # then - scale is set per-point in the python node
+        assert "scales = [" in code
+        assert "md.outScale[i]" in code
+        # should NOT reference MASH Random node
+        assert "MASH_Random" not in code
+
+    def test_point_based_code_uses_outscale(self) -> None:
+        """test that point-based code uses md.outScale (writable) not md.scale (read-only)."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=10, seed=42)
+
+        # when
+        code = gen._generate_point_based_wind_code()
+
+        # then - uses outScale (writable) not scale (read-only input)
+        assert "md.outScale[i]" in code
+        assert "md.scale[i] = " not in code
+
+    def test_wind_python_code_has_visibility_safety_net(self) -> None:
+        """test that generated code hides instances inside obstacles via outVisibility."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.add_obstacle(50, 50, 20)
+        gen.generate_points(count=10, seed=42)
+
+        # when
+        mesh_code = gen._generate_wind_python_code()
+        point_code = gen._generate_point_based_wind_code()
+
+        # then - both paths have obstacle visibility filtering
+        for code in [mesh_code, point_code]:
+            assert "is_inside_obstacle" in code
+            assert "md.outVisibility[i] = 0.0" in code
+            assert "md.outVisibility[i] = 1.0" in code
+            assert "radius_sq" in code  # squared distance optimization
+
+    def test_wind_python_code_no_scale_zeroing(self) -> None:
+        """test that visibility is used instead of scale zeroing for obstacle hiding."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.add_obstacle(50, 50, 20)
+        gen.generate_points(count=10, seed=42)
+
+        # when
+        mesh_code = gen._generate_wind_python_code()
+        point_code = gen._generate_point_based_wind_code()
+
+        # then - no outScale zeroing pattern (was the old approach)
+        for code in [mesh_code, point_code]:
+            assert "outScale[i] = (0" not in code
+
+
+class TestDensityGradient:
+    """Tests for density-based rejection sampling in point clustering."""
+
+    def test_phase1_uses_density_rejection_sampling(self) -> None:
+        """test that grid generation uses density for probabilistic acceptance."""
+        from maya_grass_gen.flow_field import ClusteringConfig, Obstacle, PointClusterer
+
+        # given - high density multiplier to make the effect obvious
+        config = ClusteringConfig(
+            obstacle_density_multiplier=5.0,
+            edge_offset=10.0,
+            cluster_falloff=0.5,
+        )
+        obstacle = Obstacle(x=500, y=500, radius=50)
+        clusterer = PointClusterer(
+            width=1000, height=1000,
+            config=config, obstacles=[obstacle], seed=42,
+        )
+
+        # when
+        points = clusterer.generate_points_grid_based(2000)
+
+        # then - count points in near vs far zones
+        near_count = 0  # within influence radius
+        far_count = 0   # outside influence radius
+        influence_r = obstacle.influence_radius or 125
+        near_area = 0
+        far_area = 0
+
+        for px, py in points:
+            dist = math.sqrt((px - 500) ** 2 + (py - 500) ** 2)
+            if obstacle.radius < dist < influence_r:
+                near_count += 1
+            elif dist >= influence_r:
+                far_count += 1
+
+        # near zone is smaller in area, so normalize by area
+        near_area = math.pi * (influence_r ** 2 - obstacle.radius ** 2)
+        far_area = 1000 * 1000 - math.pi * influence_r ** 2
+        near_density = near_count / near_area if near_area > 0 else 0
+        far_density = far_count / far_area if far_area > 0 else 0
+
+        # near-obstacle density should be higher than far-away density
+        assert near_density > far_density, (
+            f"near-obstacle density ({near_density:.6f}) should be higher than "
+            f"far density ({far_density:.6f})"
+        )
+
+    def test_no_hard_ring_artifact(self) -> None:
+        """test that density gradient is smooth, not a hard ring."""
+        from maya_grass_gen.flow_field import ClusteringConfig, Obstacle, PointClusterer
+
+        config = ClusteringConfig(
+            obstacle_density_multiplier=3.0,
+            edge_offset=10.0,
+        )
+        obstacle = Obstacle(x=500, y=500, radius=80)
+        clusterer = PointClusterer(
+            width=1000, height=1000,
+            config=config, obstacles=[obstacle], seed=42,
+        )
+
+        points = clusterer.generate_points_grid_based(5000)
+
+        # bin points by distance from obstacle
+        influence_r = obstacle.influence_radius or 200
+        num_bins = 8
+        bin_width = influence_r / num_bins
+        bin_counts = [0] * num_bins
+
+        for px, py in points:
+            dist = math.sqrt((px - 500) ** 2 + (py - 500) ** 2)
+            if dist < influence_r:
+                idx = min(int(dist / bin_width), num_bins - 1)
+                bin_counts[idx] += 1
+
+        # normalize by annular area
+        bin_densities = []
+        for i in range(num_bins):
+            inner = i * bin_width
+            outer = (i + 1) * bin_width
+            area = math.pi * (outer ** 2 - inner ** 2)
+            bin_densities.append(bin_counts[i] / area if area > 0 else 0)
+
+        # check no single bin is more than 4x its neighbors (ring artifact)
+        for i in range(1, len(bin_densities) - 1):
+            if bin_densities[i] == 0:
+                continue
+            left = bin_densities[i - 1]
+            right = bin_densities[i + 1]
+            avg_neighbor = (left + right) / 2
+            if avg_neighbor > 0:
+                ratio = bin_densities[i] / avg_neighbor
+                assert ratio < 4.0, (
+                    f"bin {i} (dist {i*bin_width:.0f}-{(i+1)*bin_width:.0f}) has "
+                    f"density ratio {ratio:.1f}x vs neighbors - ring artifact detected"
+                )
+
+    def test_get_density_at_gradient(self) -> None:
+        """test that get_density_at returns a smooth gradient near obstacles."""
+        from maya_grass_gen.flow_field import ClusteringConfig, Obstacle, PointClusterer
+
+        config = ClusteringConfig(
+            obstacle_density_multiplier=3.0,
+            edge_offset=10.0,
+            cluster_falloff=0.5,
+        )
+        obstacle = Obstacle(x=0, y=0, radius=50)
+        clusterer = PointClusterer(
+            width=1000, height=1000,
+            config=config, obstacles=[obstacle], seed=42,
+        )
+
+        # sample density at increasing distances from obstacle center
+        densities = []
+        for dist in range(0, 200, 5):
+            d = clusterer.get_density_at(float(dist), 0)
+            densities.append((dist, d))
+
+        # inside obstacle should be 0
+        inside = [d for dist, d in densities if dist < 50]
+        assert all(d == 0 for d in inside), "density inside obstacle should be 0"
+
+        # just outside should be elevated (near edge_offset=10 from edge)
+        near_edge = [d for dist, d in densities if 50 < dist < 70]
+        assert any(d > 1.0 for d in near_edge), "density near obstacle edge should be elevated"
+
+        # far away should approach 1.0
+        far = [d for dist, d in densities if dist > 150]
+        assert all(abs(d - 1.0) < 0.1 for d in far), "density far from obstacle should be ~1.0"
