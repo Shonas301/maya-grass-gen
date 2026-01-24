@@ -665,47 +665,9 @@ class GrassGenerator:
             print(f"setting point count to {point_count}")
             mash_network.setPointCount(point_count)
 
-            # add random node for scale variation
-            if scale_range:
-                random_node = mash_network.addNode("MASH_Random")
-                random_name = self._get_mash_node_name(random_node, "Random", network_name)
-                print(f"added MASH Random node: {random_name}")
-
-                # calculate scale offset and range for random node
-                # random node uses: base_scale + random(-scaleX, +scaleX)
-                scale_min, scale_max = scale_range
-                scale_center = (scale_min + scale_max) / 2
-                scale_variation = (scale_max - scale_min) / 2
-
-                # zero out position randomization (only want scale)
-                cmds.setAttr(f"{random_name}.positionX", 0)
-                cmds.setAttr(f"{random_name}.positionY", 0)
-                cmds.setAttr(f"{random_name}.positionZ", 0)
-
-                # zero out rotation randomization
-                cmds.setAttr(f"{random_name}.rotationX", 0)
-                cmds.setAttr(f"{random_name}.rotationY", 0)
-                cmds.setAttr(f"{random_name}.rotationZ", 0)
-
-                # set scale variation (uniform scale for grass)
-                # uniformRandom=True makes scaleX apply to all axes uniformly
-                cmds.setAttr(f"{random_name}.uniformRandom", True)
-                cmds.setAttr(f"{random_name}.scaleX", scale_variation)
-
-                # note: MASH Random adds/subtracts from base scale of 1.0
-                # so we need to offset if our center isn't 1.0
-                if abs(scale_center - 1.0) > 0.01:
-                    # add an offset node to shift the scale center
-                    offset_node = mash_network.addNode("MASH_Offset")
-                    offset_name = self._get_mash_node_name(offset_node, "Offset", network_name)
-                    print(f"added MASH Offset node: {offset_name} (scale center: {scale_center})")
-                    # MASH_Offset uses scaleOffset0/1/2 for X/Y/Z
-                    scale_offset = scale_center - 1.0
-                    cmds.setAttr(f"{offset_name}.scaleOffset0", scale_offset)
-                    cmds.setAttr(f"{offset_name}.scaleOffset1", scale_offset)
-                    cmds.setAttr(f"{offset_name}.scaleOffset2", scale_offset)
-
-                print(f"scale range configured: {scale_min} to {scale_max}")
+            # note: we skip the Random/Offset nodes for scale variation here
+            # because our Python node sets scales directly from pre-calculated
+            # _grass_points which already have scale variation applied
 
             # get waiter name for python node
             waiter_name = mash_network.waiter
