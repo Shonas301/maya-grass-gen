@@ -44,11 +44,17 @@ global proc install() {
     fprint $fileId ("+ MAYAVERSION:2023 maya_grass_plugin 1.0 " + $modulePath + "\n");
     fprint $fileId ("+ MAYAVERSION:2024 maya_grass_plugin 1.0 " + $modulePath + "\n");
     fprint $fileId ("+ MAYAVERSION:2025 maya_grass_plugin 1.0 " + $modulePath + "\n");
+    fprint $fileId ("+ MAYAVERSION:2026 maya_grass_plugin 1.0 " + $modulePath + "\n");
     fprint $fileId "icons: icons\n";
     fprint $fileId "scripts: scripts\n";
     fprint $fileId "PYTHONPATH +:= scripts\n";
+    fprint $fileId "PYTHONPATH +:= vendor\n";
 
     fclose $fileId;
+
+    // --- install numpy via mayapy ---
+    print "Installing numpy dependency...\n";
+    int $numpyInstalled = installNumpy();
 
     // create shelf button directly (don't rely on userSetup.py)
     // get top shelf layout
@@ -98,6 +104,16 @@ global proc install() {
     print ("Module path: " + $modulePath + "\n");
     print ("Mod file: " + $modFile + "\n");
     print "\n";
+    if ($numpyInstalled) {
+        print "numpy: installed successfully\n";
+    } else {
+        print "numpy: FAILED to install automatically.\n";
+        print "  Please run this in a terminal:\n";
+        print "    mayapy -m pip install --user numpy\n";
+        print "\n";
+    }
+    print "opensimplex: bundled (no install needed)\n";
+    print "\n";
     print "The 'Grass Generator' button has been added to the Custom shelf.\n";
     print "Restart Maya, then click the shelf button to open the UI.\n";
     print "\n";
@@ -106,5 +122,107 @@ global proc install() {
     print "    show_grass_ui()\n";
     print "===========================================\n";
 }
+
+
+global proc int installNumpy() {
+    // try to install numpy using mayapy
+    // returns 1 on success, 0 on failure
+
+    string $mayapy = findMayapy();
+    if ($mayapy == "") {
+        warning "Could not locate mayapy. numpy must be installed manually.";
+        return 0;
+    }
+
+    print ("Found mayapy at: " + $mayapy + "\n");
+    print "Running: mayapy -m pip install --user numpy\n";
+    print "This may take a moment...\n";
+
+    // run pip install
+    string $cmd = "\"" + $mayapy + "\" -m pip install --user numpy";
+    int $result = `system($cmd)`;
+
+    // verify numpy is importable
+    string $verifyCmd = "\"" + $mayapy + "\" -c \"import numpy; print(numpy.__version__)\"";
+    string $version = `system($verifyCmd)`;
+
+    if ($version != "") {
+        print ("numpy " + $version + " installed successfully.\n");
+        return 1;
+    } else {
+        warning "numpy installation could not be verified.";
+        return 0;
+    }
+}
+
+
+global proc string findMayapy() {
+    // locate the mayapy executable for the current platform
+
+    string $mayaLocation = `getenv "MAYA_LOCATION"`;
+
+    // try MAYA_LOCATION first (most reliable)
+    if ($mayaLocation != "") {
+        // macOS: MAYA_LOCATION is the .app bundle Contents dir
+        string $macPath = $mayaLocation + "/bin/mayapy";
+        if (`filetest -f $macPath`) return $macPath;
+
+        // windows
+        string $winPath = $mayaLocation + "/bin/mayapy.exe";
+        if (`filetest -f $winPath`) return $winPath;
+
+        // linux
+        string $linPath = $mayaLocation + "/bin/mayapy";
+        if (`filetest -f $linPath`) return $linPath;
+    }
+
+    // fallback: try common paths per platform
+    string $os = `about -operatingSystem`;
+
+    if (`gmatch $os "mac*"` || `gmatch $os "Mac*"`) {
+        // macOS common locations
+        string $mayaVersion = `about -version`;
+        // extract first 4 digits as the year
+        string $year = `match "[0-9][0-9][0-9][0-9]" $mayaVersion`;
+        string $paths[] = {
+            "/Applications/Autodesk/maya" + $year + "/Maya.app/Contents/bin/mayapy",
+            "/Applications/Autodesk/maya2026/Maya.app/Contents/bin/mayapy",
+            "/Applications/Autodesk/maya2025/Maya.app/Contents/bin/mayapy",
+            "/Applications/Autodesk/maya2024/Maya.app/Contents/bin/mayapy"
+        };
+        for ($p in $paths) {
+            if (`filetest -f $p`) return $p;
+        }
+    } else if (`gmatch $os "win*"` || `gmatch $os "Win*"`) {
+        // windows common locations
+        string $mayaVersion = `about -version`;
+        string $year = `match "[0-9][0-9][0-9][0-9]" $mayaVersion`;
+        string $paths[] = {
+            "C:/Program Files/Autodesk/Maya" + $year + "/bin/mayapy.exe",
+            "C:/Program Files/Autodesk/Maya2026/bin/mayapy.exe",
+            "C:/Program Files/Autodesk/Maya2025/bin/mayapy.exe",
+            "C:/Program Files/Autodesk/Maya2024/bin/mayapy.exe"
+        };
+        for ($p in $paths) {
+            if (`filetest -f $p`) return $p;
+        }
+    } else {
+        // linux common locations
+        string $mayaVersion = `about -version`;
+        string $year = `match "[0-9][0-9][0-9][0-9]" $mayaVersion`;
+        string $paths[] = {
+            "/usr/autodesk/maya" + $year + "/bin/mayapy",
+            "/usr/autodesk/maya2026/bin/mayapy",
+            "/usr/autodesk/maya2025/bin/mayapy",
+            "/usr/autodesk/maya2024/bin/mayapy"
+        };
+        for ($p in $paths) {
+            if (`filetest -f $p`) return $p;
+        }
+    }
+
+    return "";
+}
+
 
 install();
