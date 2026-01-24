@@ -556,7 +556,6 @@ class GrassGenerator:
             distribute = mash_network.addNode("MASH_Distribute")
             distribute_name = self._get_mash_node_name(distribute, "Distribute", network_name)
             print(f"added MASH node: {distribute_name}")
-            cmds.setAttr(f"{distribute_name}.distribution", 0)  # initial state
             cmds.setAttr(f"{distribute_name}.pointCount", len(self._grass_points))
 
             mash_network.setPointCount(len(self._grass_points))
@@ -690,9 +689,11 @@ class GrassGenerator:
                     offset_node = mash_network.addNode("MASH_Offset")
                     offset_name = self._get_mash_node_name(offset_node, "Offset", network_name)
                     print(f"added MASH Offset node: {offset_name} (scale center: {scale_center})")
-                    cmds.setAttr(f"{offset_name}.scaleX", scale_center - 1.0)
-                    cmds.setAttr(f"{offset_name}.scaleY", scale_center - 1.0)
-                    cmds.setAttr(f"{offset_name}.scaleZ", scale_center - 1.0)
+                    # MASH_Offset uses scaleOffset0/1/2 for X/Y/Z
+                    scale_offset = scale_center - 1.0
+                    cmds.setAttr(f"{offset_name}.scaleOffset0", scale_offset)
+                    cmds.setAttr(f"{offset_name}.scaleOffset1", scale_offset)
+                    cmds.setAttr(f"{offset_name}.scaleOffset2", scale_offset)
 
                 print(f"scale range configured: {scale_min} to {scale_max}")
 

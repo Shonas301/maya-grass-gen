@@ -1,4 +1,7 @@
-.PHONY: install install-dev lint typecheck test all clean
+.PHONY: install install-dev lint typecheck test test-maya all clean
+
+# path to mayapy - override with: make test-maya MAYAPY=/path/to/mayapy
+MAYAPY ?= /System/Volumes/Data/Applications/Autodesk/maya2026/Maya.app/Contents/bin/mayapy
 
 install:
 	pip install -r requirements.in
@@ -16,7 +19,10 @@ typecheck:
 	mypy src
 
 test:
-	pytest
+	pytest tests/unit
+
+test-maya:
+	$(MAYAPY) -m pytest tests/integration -v
 
 all: lint typecheck test
 
