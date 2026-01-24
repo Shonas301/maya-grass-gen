@@ -647,117 +647,29 @@ class GrassGenerator:
         target_mesh = terrain_mesh or self.terrain.mesh_name
 
         try:
-            # add distribute node set to mesh distribution mode
-            distribute = mash_network.addNode("MASH_Distribute")
+            # use the proper MASH API for mesh-based distribution
+            # meshDistribute() handles all internal wiring automatically
+            print(f"setting up mesh distribution on '{target_mesh}'")
+            mash_network.meshDistribute(target_mesh)
+            print(f"meshDistribute complete")
 
-            # === DEBUG: inspect the mash_network object ===
-            print(f"\n{'='*60}")
-            print("DEBUG: mash_network object inspection")
-            print(f"  type: {type(mash_network)}")
-            print(f"  dir: {[x for x in dir(mash_network) if not x.startswith('_')]}")
-            if hasattr(mash_network, 'name'):
-                print(f"  .name: {mash_network.name}")
-            if hasattr(mash_network, 'getNetworkName'):
-                print(f"  .getNetworkName(): {mash_network.getNetworkName()}")
-            if hasattr(mash_network, 'waiter'):
-                print(f"  .waiter: {mash_network.waiter}")
+            # set point count
+            point_count = len(self._grass_points)
+            print(f"setting point count to {point_count}")
+            mash_network.setPointCount(point_count)
 
-            # === DEBUG: inspect the distribute node wrapper ===
-            print(f"\nDEBUG: distribute node wrapper inspection")
-            print(f"  type: {type(distribute)}")
-            print(f"  repr: {repr(distribute)}")
-            print(f"  str: {str(distribute)}")
-            print(f"  dir: {[x for x in dir(distribute) if not x.startswith('_')]}")
-            if hasattr(distribute, 'name'):
-                print(f"  .name: {distribute.name}")
-            if hasattr(distribute, 'getNodeName'):
-                print(f"  .getNodeName(): {distribute.getNodeName()}")
-            if hasattr(distribute, 'node'):
-                print(f"  .node: {distribute.node}")
-
-            # === DEBUG: list all MASH nodes in scene ===
-            print(f"\nDEBUG: all MASH nodes in scene")
-            all_mash_nodes = cmds.ls("*MASH*") or []
-            print(f"  all *MASH* nodes: {all_mash_nodes}")
-            all_distributes = cmds.ls(type="MASH_Distribute") or []
-            print(f"  MASH_Distribute nodes: {all_distributes}")
-
-            # === DEBUG: check what nodes match our network name ===
-            print(f"\nDEBUG: nodes matching network '{network_name}'")
-            matching = cmds.ls(f"{network_name}*") or []
-            print(f"  {network_name}* nodes: {matching}")
-            print(f"{'='*60}\n")
-
-            # FIX: use the waiter-based name (without numeric suffix) which has the real attributes
-            # the wrapper's .name returns _Distribute1 but the real node is _Distribute
+            # get waiter name for python node
             waiter_name = mash_network.waiter
-            distribute_name = f"{waiter_name}_Distribute"
-            print(f"using waiter-based distribute name: {distribute_name}")
-
-            # verify node exists before setting attributes
-            if not cmds.objExists(distribute_name):
-                print(f"  WARNING: {distribute_name} not found, trying fallback...")
-                # fallback: find matching distribute node without numeric suffix
-                matching_distributes = [d for d in all_distributes if d.startswith(waiter_name)]
-                print(f"  matching distributes: {matching_distributes}")
-                # prefer the one without a trailing digit
-                for d in matching_distributes:
-                    if not d[-1].isdigit():
-                        distribute_name = d
-                        print(f"  using fallback: {distribute_name}")
-                        break
-                else:
-                    if matching_distributes:
-                        distribute_name = matching_distributes[0]
-                        print(f"  using first match: {distribute_name}")
-
-            if not cmds.objExists(distribute_name):
-                raise RuntimeError(f"MASH distribute node '{distribute_name}' does not exist")
-
-            # list attributes containing 'distribution' to verify the right attr name
-            print(f"checking attributes on {distribute_name}...")
-            all_attrs = cmds.listAttr(distribute_name) or []
-            dist_attrs = [a for a in all_attrs if 'distrib' in a.lower()]
-            print(f"  distribution-related attrs: {dist_attrs}")
-
-            # distribution mode 4 = mesh
-            cmds.setAttr(f"{distribute_name}.distribution", 4)
-            cmds.setAttr(f"{distribute_name}.pointCount", len(self._grass_points))
-
-            # connect terrain mesh to distribute node
-            if target_mesh:
-                print(f"connecting terrain mesh '{target_mesh}' to distribute node")
-                mesh_shape = cmds.listRelatives(target_mesh, shapes=True, type="mesh")
-                if mesh_shape:
-                    cmds.connectAttr(
-                        f"{mesh_shape[0]}.worldMesh[0]",
-                        f"{distribute_name}.inputMesh",
-                        force=True,
-                    )
-
-            mash_network.setPointCount(len(self._grass_points))
+            print(f"waiter name: {waiter_name}")
 
             # add python node for wind-based orientation
             python_node = mash_network.addNode("MASH_Python")
-            # FIX: use waiter-based name for python node too
-            python_node_name = f"{waiter_name}_Python"
-            print(f"using waiter-based python name: {python_node_name}")
-            if not cmds.objExists(python_node_name):
-                all_pythons = cmds.ls(type="MASH_Python") or []
-                matching_pythons = [p for p in all_pythons if p.startswith(waiter_name)]
-                print(f"  python node {python_node_name} not found, matches: {matching_pythons}")
-                for p in matching_pythons:
-                    if not p[-1].isdigit():
-                        python_node_name = p
-                        break
-                else:
-                    if matching_pythons:
-                        python_node_name = matching_pythons[0]
-            print(f"final python node: {python_node_name}")
+            python_node_name = python_node.name
+            print(f"added python node: {python_node_name}")
 
             # generate wind expression that updates with time
             wind_code = self._generate_wind_python_code()
-            print(f"python wind code: {len(wind_code)} characters")
+            print(f"setting python code ({len(wind_code)} chars) on {python_node_name}")
             cmds.setAttr(f"{python_node_name}.pythonCode", wind_code, type="string")
         except RuntimeError as e:
             msg = f"failed to create mesh-distributed MASH network '{network_name}': {e}"
