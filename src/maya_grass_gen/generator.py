@@ -850,7 +850,7 @@ for i in range(min(len(positions), len(md.position))):
     lean_amount = min({self._max_lean_angle}, magnitude * 10)
 
     # combine base rotation with wind-based lean
-    md.rotation[i] = (0, base_rotations[i] + math.degrees(wind_angle) * 0.3, lean_amount)
+    md.rotation[i] = (lean_amount, base_rotations[i] + math.degrees(wind_angle) * 0.3, 0)
 '''
 
     def _generate_wind_python_code(self) -> str:
@@ -951,7 +951,7 @@ for i in range(count):
     x, y, z = positions[i]
     angle = get_wind_angle(x, z, frame)
     lean_amount = min(max_lean, 15 + 10 * abs(math.sin(angle)))
-    md.outRotation[i] = (0, math.degrees(angle), lean_amount)
+    md.outRotation[i] = (lean_amount, math.degrees(angle), 0)
 
 md.setData()
 '''
