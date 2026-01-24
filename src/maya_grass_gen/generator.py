@@ -665,9 +665,38 @@ class GrassGenerator:
             print(f"setting point count to {point_count}")
             mash_network.setPointCount(point_count)
 
-            # note: we skip the Random/Offset nodes for scale variation here
-            # because our Python node sets scales directly from pre-calculated
-            # _grass_points which already have scale variation applied
+            # add random node for scale variation
+            # (python node handles positions/rotations, random node handles scale)
+            if scale_range:
+                random_node = mash_network.addNode("MASH_Random")
+                random_name = self._get_mash_node_name(random_node, "Random", network_name)
+                print(f"added MASH Random node: {random_name}")
+
+                scale_min, scale_max = scale_range
+                scale_center = (scale_min + scale_max) / 2
+                scale_variation = (scale_max - scale_min) / 2
+
+                # zero out position and rotation randomization (only want scale)
+                cmds.setAttr(f"{random_name}.positionX", 0)
+                cmds.setAttr(f"{random_name}.positionY", 0)
+                cmds.setAttr(f"{random_name}.positionZ", 0)
+                cmds.setAttr(f"{random_name}.rotationX", 0)
+                cmds.setAttr(f"{random_name}.rotationY", 0)
+                cmds.setAttr(f"{random_name}.rotationZ", 0)
+
+                cmds.setAttr(f"{random_name}.uniformRandom", True)
+                cmds.setAttr(f"{random_name}.scaleX", scale_variation)
+
+                if abs(scale_center - 1.0) > 0.01:
+                    offset_node = mash_network.addNode("MASH_Offset")
+                    offset_name = self._get_mash_node_name(offset_node, "Offset", network_name)
+                    print(f"added MASH Offset node: {offset_name} (scale center: {scale_center})")
+                    scale_offset = scale_center - 1.0
+                    cmds.setAttr(f"{offset_name}.scaleOffset0", scale_offset)
+                    cmds.setAttr(f"{offset_name}.scaleOffset1", scale_offset)
+                    cmds.setAttr(f"{offset_name}.scaleOffset2", scale_offset)
+
+                print(f"scale range configured: {scale_min} to {scale_max}")
 
             # get waiter name for python node
             waiter_name = mash_network.waiter
@@ -827,7 +856,6 @@ for i in range(min(len(positions), len(md.position))):
         """
         # pre-computed obstacle-avoiding positions
         positions_data = [(p.x, p.y, p.z) for p in self._grass_points]
-        scales_data = [(p.scale, p.scale, p.scale) for p in self._grass_points]
 
         # include obstacle data for flow deflection
         obstacles_data = [
@@ -850,7 +878,6 @@ frame = md.getFrame()
 
 # pre-computed obstacle-avoiding positions
 positions = {positions_data}
-scales = {scales_data}
 
 # wind parameters
 noise_scale = {self.wind.noise_scale}
@@ -907,9 +934,8 @@ count = min(len(positions), md.count())
 for i in range(count):
     # override MASH position with our obstacle-avoiding position
     md.outPosition[i] = positions[i]
-    md.outScale[i] = scales[i]
 
-    # apply wind animation
+    # apply wind animation (scale handled by MASH Random node)
     x, y, z = positions[i]
     angle = get_wind_angle(x, z, frame)
     lean_amount = min(max_lean, 15 + 10 * abs(math.sin(angle)))
