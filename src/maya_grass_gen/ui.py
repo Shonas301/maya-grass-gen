@@ -114,6 +114,12 @@ def execute_grass_generation(*args) -> None:
     seed = cmds.intFieldGrp("seed_field", query=True, value1=True)
     noise = cmds.floatFieldGrp("noise_field", query=True, value1=True)
     time_scale = cmds.floatFieldGrp("time_field", query=True, value1=True)
+    octaves = cmds.intSliderGrp("octaves_field", query=True, value=True)
+    persistence = cmds.floatSliderGrp("persistence_field", query=True, value=True)
+    max_lean = cmds.floatSliderGrp("max_lean_field", query=True, value=True)
+    min_distance = cmds.floatSliderGrp("min_distance_field", query=True, value=True)
+    cluster_falloff = cmds.floatSliderGrp("cluster_falloff_field", query=True, value=True)
+    edge_offset = cmds.floatSliderGrp("edge_offset_field", query=True, value=True)
 
     # save all preferences
     save_pref("terrain", terrain)
@@ -128,6 +134,12 @@ def execute_grass_generation(*args) -> None:
     save_pref("seed", seed)
     save_pref("noise", noise)
     save_pref("time", time_scale)
+    save_pref("octaves", octaves)
+    save_pref("persistence", persistence)
+    save_pref("max_lean", max_lean)
+    save_pref("min_distance", min_distance)
+    save_pref("cluster_falloff", cluster_falloff)
+    save_pref("edge_offset", edge_offset)
 
     # execute generation
     try:
@@ -144,6 +156,12 @@ def execute_grass_generation(*args) -> None:
             noise_scale=noise,
             time_scale=time_scale,
             proximity_density_boost=proximity,
+            octaves=octaves,
+            min_distance=min_distance,
+            max_lean_angle=max_lean,
+            cluster_falloff=cluster_falloff,
+            edge_offset=edge_offset,
+            persistence=persistence,
         )
 
         # show success message
@@ -181,7 +199,7 @@ def show_grass_ui() -> None:
     window = cmds.window(
         WINDOW_NAME,
         title="Grass Generator",
-        widthHeight=(420, 580),
+        widthHeight=(420, 780),
         sizeable=False,
     )
 
@@ -307,8 +325,8 @@ def show_grass_ui() -> None:
     cmds.setParent('..')  # exit columnLayout
     cmds.setParent('..')  # exit frameLayout
 
-    # advanced section
-    cmds.frameLayout(label="Advanced", collapsable=True, collapse=True)
+    # advanced section (expanded by default)
+    cmds.frameLayout(label="Advanced", collapsable=True, collapse=False)
     cmds.columnLayout(adjustableColumn=True, rowSpacing=3)
 
     cmds.floatFieldGrp(
@@ -325,6 +343,71 @@ def show_grass_ui() -> None:
         value1=load_pref("time", 0.008),
         precision=4,
         columnWidth2=(100, 100),
+    )
+
+    cmds.intSliderGrp(
+        "octaves_field",
+        label="Octaves:",
+        field=True,
+        minValue=1,
+        maxValue=8,
+        value=load_pref("octaves", 4),
+        columnWidth3=(100, 50, 250),
+    )
+
+    cmds.floatSliderGrp(
+        "persistence_field",
+        label="Persistence:",
+        field=True,
+        minValue=0.1,
+        maxValue=1.0,
+        value=load_pref("persistence", 0.5),
+        precision=2,
+        columnWidth3=(100, 50, 250),
+    )
+
+    cmds.floatSliderGrp(
+        "max_lean_field",
+        label="Max Lean Angle:",
+        field=True,
+        minValue=0.0,
+        maxValue=90.0,
+        value=load_pref("max_lean", 30.0),
+        precision=1,
+        columnWidth3=(100, 50, 250),
+    )
+
+    cmds.floatSliderGrp(
+        "min_distance_field",
+        label="Min Distance:",
+        field=True,
+        minValue=1.0,
+        maxValue=50.0,
+        value=load_pref("min_distance", 5.0),
+        precision=1,
+        columnWidth3=(100, 50, 250),
+    )
+
+    cmds.floatSliderGrp(
+        "cluster_falloff_field",
+        label="Cluster Falloff:",
+        field=True,
+        minValue=0.1,
+        maxValue=1.0,
+        value=load_pref("cluster_falloff", 0.5),
+        precision=2,
+        columnWidth3=(100, 50, 250),
+    )
+
+    cmds.floatSliderGrp(
+        "edge_offset_field",
+        label="Edge Offset:",
+        field=True,
+        minValue=1.0,
+        maxValue=50.0,
+        value=load_pref("edge_offset", 10.0),
+        precision=1,
+        columnWidth3=(100, 50, 250),
     )
 
     cmds.setParent('..')  # exit columnLayout

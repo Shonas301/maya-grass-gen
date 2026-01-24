@@ -8,11 +8,21 @@ import math
 import tempfile
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from maya_grass_gen.generator import GrassGenerator, GrassPoint
 from maya_grass_gen.terrain import DetectedObstacle, TerrainAnalyzer, TerrainBounds
 from maya_grass_gen.wind import WindField
+
+
+def _maya_available() -> bool:
+    """check if real maya is available."""
+    try:
+        import maya.standalone
+        return True
+    except ImportError:
+        return False
 
 
 class TestTerrainBounds:
@@ -474,6 +484,7 @@ class TestGrassGenerator:
 
         Path(temp_path).unlink()
 
+    @pytest.mark.skipif(_maya_available(), reason="test expects maya unavailable")
     def test_detect_scene_obstacles_returns_zero_without_maya(self) -> None:
         """test that scene obstacle detection returns 0 without maya."""
         # given
@@ -485,6 +496,7 @@ class TestGrassGenerator:
         # then - should return 0 since maya isn't available
         assert count == 0
 
+    @pytest.mark.skipif(_maya_available(), reason="test expects maya unavailable")
     def test_detect_all_obstacles_combines_sources(self) -> None:
         """test that detect_all_obstacles combines bump map and manual obstacles."""
         # given
@@ -503,6 +515,7 @@ class TestGrassGenerator:
 class TestTerrainAnalyzerSceneDetection:
     """Tests for scene object detection in TerrainAnalyzer."""
 
+    @pytest.mark.skipif(_maya_available(), reason="test expects maya unavailable")
     def test_detect_obstacles_from_scene_without_maya(self) -> None:
         """test that scene detection returns empty list without maya."""
         # given
@@ -515,6 +528,7 @@ class TestTerrainAnalyzerSceneDetection:
         # then - should return empty list without maya
         assert obstacles == []
 
+    @pytest.mark.skipif(_maya_available(), reason="test expects maya unavailable")
     def test_detect_all_obstacles_without_bump_map(self) -> None:
         """test detect_all_obstacles when no bump map or maya available."""
         # given
@@ -607,6 +621,7 @@ class TestWindFieldObstacleAwareExpression:
 class TestGrassGeneratorMeshDistribution:
     """Tests for MASH network mesh distribution features."""
 
+    @pytest.mark.skipif(_maya_available(), reason="test expects maya unavailable")
     def test_create_mash_network_returns_none_without_maya(self) -> None:
         """test that create_mash_network returns None without maya."""
         # given
@@ -619,6 +634,7 @@ class TestGrassGeneratorMeshDistribution:
         # then
         assert result is None
 
+    @pytest.mark.skipif(_maya_available(), reason="test expects maya unavailable")
     def test_create_mash_network_with_mesh_option_returns_none(self) -> None:
         """test that mesh distribution option works without maya."""
         # given
@@ -659,8 +675,8 @@ class TestGrassGeneratorMeshDistribution:
 
         # then
         assert "frame" in code
-        assert "md.rotation" in code
-        assert "md.position" in code
+        assert "md.outRotation" in code
+        assert "md.outPosition" in code
 
     def test_generate_point_based_wind_code_has_positions(self) -> None:
         """test that point-based code includes pre-computed positions."""

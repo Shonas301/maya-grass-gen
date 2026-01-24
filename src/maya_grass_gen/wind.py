@@ -44,6 +44,8 @@ class WindField:
         noise_scale: float = 0.004,
         wind_strength: float = 2.5,
         time_scale: float = 0.008,
+        octaves: int = 4,
+        persistence: float = 0.5,
     ) -> None:
         """Initialize wind field.
 
@@ -51,10 +53,14 @@ class WindField:
             noise_scale: how fine/coarse the wind pattern is
             wind_strength: magnitude of wind vectors
             time_scale: how fast the wind pattern evolves
+            octaves: number of noise octaves for wind pattern complexity
+            persistence: how much each octave contributes (roughness)
         """
         self.noise_scale = noise_scale
         self.wind_strength = wind_strength
         self.time_scale = time_scale
+        self.octaves = octaves
+        self.persistence = persistence
 
         self._obstacles: list[dict] = []
         self._flow_field: FlowField | None = None
@@ -71,6 +77,8 @@ class WindField:
             noise_scale=self.noise_scale,
             flow_strength=self.wind_strength,
             time_scale=self.time_scale,
+            octaves=self.octaves,
+            persistence=self.persistence,
         )
 
         self._flow_field = FlowField(config=config)
