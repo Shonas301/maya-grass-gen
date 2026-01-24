@@ -886,8 +886,18 @@ noise_scale = {self.wind.noise_scale}
 wind_strength = {self.wind.wind_strength}
 time_scale = {self.wind.time_scale}
 
-# obstacles for flow deflection
+# obstacles for flow deflection and point filtering
 obstacles = {obstacles_data}
+
+def is_inside_obstacle(x, z):
+    """check if point is inside any obstacle radius."""
+    for obs in obstacles:
+        dx = x - obs["x"]
+        dz = z - obs["z"]
+        dist = math.sqrt(dx*dx + dz*dz)
+        if dist < obs["radius"]:
+            return True
+    return False
 
 def get_obstacle_deflection(x, z, obs):
     dx = x - obs["x"]
@@ -930,11 +940,18 @@ def get_wind_angle(x, z, time):
 
     return math.atan2(vz, vx)
 
-# apply wind to each point
+# apply wind to each point, filtering out points inside obstacles
 max_lean = {self._max_lean_angle}
 count = md.count()
 for i in range(count):
     pos = md.outPosition[i]
+
+    # filter out grass inside obstacles by setting scale to 0
+    if is_inside_obstacle(pos.x, pos.z):
+        md.outScale[i] = (0, 0, 0)
+        continue
+
+    # apply wind animation to valid grass
     angle = get_wind_angle(pos.x, pos.z, frame)
     lean_amount = min(max_lean, 15 + 10 * abs(math.sin(angle)))
     md.outRotation[i] = (0, math.degrees(angle), lean_amount)
