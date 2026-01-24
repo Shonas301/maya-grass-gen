@@ -513,6 +513,7 @@ class GrassGenerator:
         network_name: str = "grassMASH",
         distribute_on_mesh: bool = False,
         terrain_mesh: str | None = None,
+        scale_range: tuple[float, float] | None = None,
     ) -> str | None:
         """Create MASH network for grass instancing.
 
@@ -521,6 +522,7 @@ class GrassGenerator:
             network_name: name for the MASH network
             distribute_on_mesh: if True, distributes points on mesh surface
             terrain_mesh: mesh to distribute on (uses terrain.mesh_name if None)
+            scale_range: optional (min, max) scale for random variation
 
         Returns:
             name of created MASH network, or None if maya not available
@@ -544,7 +546,7 @@ class GrassGenerator:
             # use mesh surface distribution
             print("distribution mode: mesh")
             return self._create_mesh_distributed_network(
-                mash_network, terrain_mesh, network_name
+                mash_network, terrain_mesh, network_name, scale_range
             )
 
         print("distribution mode: point-based")
@@ -637,6 +639,7 @@ class GrassGenerator:
         mash_network: Any,
         terrain_mesh: str | None,
         network_name: str,
+        scale_range: tuple[float, float] | None = None,
     ) -> str:
         """Create MASH network with mesh surface distribution.
 
@@ -647,6 +650,7 @@ class GrassGenerator:
             mash_network: MASH network object
             terrain_mesh: mesh to distribute on
             network_name: name of the network
+            scale_range: optional (min, max) scale tuple for random variation
 
         Returns:
             name of created network
@@ -664,6 +668,45 @@ class GrassGenerator:
             point_count = len(self._grass_points)
             print(f"setting point count to {point_count}")
             mash_network.setPointCount(point_count)
+
+            # add random node for scale variation
+            if scale_range:
+                random_node = mash_network.addNode("MASH_Random")
+                random_name = self._get_mash_node_name(random_node, "Random", network_name)
+                print(f"added MASH Random node: {random_name}")
+
+                # calculate scale offset and range for random node
+                # random node uses: base_scale + random(-scaleX, +scaleX)
+                scale_min, scale_max = scale_range
+                scale_center = (scale_min + scale_max) / 2
+                scale_variation = (scale_max - scale_min) / 2
+
+                # zero out position randomization (only want scale)
+                cmds.setAttr(f"{random_name}.positionX", 0)
+                cmds.setAttr(f"{random_name}.positionY", 0)
+                cmds.setAttr(f"{random_name}.positionZ", 0)
+
+                # zero out rotation randomization
+                cmds.setAttr(f"{random_name}.rotationX", 0)
+                cmds.setAttr(f"{random_name}.rotationY", 0)
+                cmds.setAttr(f"{random_name}.rotationZ", 0)
+
+                # set scale variation (uniform scale for grass)
+                cmds.setAttr(f"{random_name}.uniformScale", True)
+                cmds.setAttr(f"{random_name}.scaleX", scale_variation)
+
+                # note: MASH Random adds/subtracts from base scale of 1.0
+                # so we need to offset if our center isn't 1.0
+                if abs(scale_center - 1.0) > 0.01:
+                    # add an offset node to shift the scale center
+                    offset_node = mash_network.addNode("MASH_Offset")
+                    offset_name = self._get_mash_node_name(offset_node, "Offset", network_name)
+                    print(f"added MASH Offset node: {offset_name} (scale center: {scale_center})")
+                    cmds.setAttr(f"{offset_name}.scaleX", scale_center - 1.0)
+                    cmds.setAttr(f"{offset_name}.scaleY", scale_center - 1.0)
+                    cmds.setAttr(f"{offset_name}.scaleZ", scale_center - 1.0)
+
+                print(f"scale range configured: {scale_min} to {scale_max}")
 
             # get waiter name for python node
             waiter_name = mash_network.waiter
