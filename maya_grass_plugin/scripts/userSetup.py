@@ -1,13 +1,49 @@
 """maya grass plugin startup script.
 
 this script runs when maya starts. it adds a shelf button for quick access
-to the grass generator ui.
+to the grass generator ui and checks that required dependencies are available.
 
 the button is added to a 'Custom' shelf. if the shelf doesn't exist, it is created.
 """
 
 import maya.cmds as cmds
 import maya.mel as mel
+
+
+def check_dependencies():
+    """check that required python dependencies are available."""
+    missing = []
+
+    try:
+        import numpy  # noqa: F401
+    except ImportError:
+        missing.append("numpy")
+
+    try:
+        import opensimplex  # noqa: F401
+    except ImportError:
+        missing.append("opensimplex")
+
+    if missing:
+        deps = ", ".join(missing)
+        cmds.confirmDialog(
+            title="Grass Generator - Missing Dependencies",
+            message=(
+                f"The Grass Generator plugin is missing required dependencies:\n\n"
+                f"  {deps}\n\n"
+                f"To install, run this command in a terminal:\n\n"
+                f"  mayapy -m pip install --user {' '.join(missing)}\n\n"
+                f"On macOS, mayapy is typically at:\n"
+                f"  /Applications/Autodesk/maya<version>/Maya.app/Contents/bin/mayapy\n\n"
+                f"On Windows:\n"
+                f"  C:\\Program Files\\Autodesk\\Maya<version>\\bin\\mayapy.exe\n\n"
+                f"Restart Maya after installing."
+            ),
+            button=["OK"],
+            defaultButton="OK",
+            icon="warning",
+        )
+        cmds.warning(f"grass generator: missing dependencies: {deps}")
 
 
 def add_grass_shelf_button():
@@ -44,6 +80,12 @@ def add_grass_shelf_button():
     print("grass generator shelf button added to 'Custom' shelf")
 
 
+def startup():
+    """run all startup tasks."""
+    add_grass_shelf_button()
+    check_dependencies()
+
+
 # defer execution until maya ui is ready
 # (ui framework not initialized when userSetup.py runs)
-cmds.evalDeferred(add_grass_shelf_button, lowestPriority=True)
+cmds.evalDeferred(startup, lowestPriority=True)
