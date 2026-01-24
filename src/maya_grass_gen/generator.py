@@ -857,11 +857,16 @@ for i in range(min(len(positions), len(md.position))):
         """Generate Python code for MASH wind animation.
 
         Creates expression that calculates wind-based rotation and lean
-        for each grass instance based on its position.
+        for each grass instance based on its position. Uses pre-calculated
+        obstacle-avoiding positions instead of MASH's random distribution.
 
         Returns:
             Python code string for MASH Python node
         """
+        # pre-computed obstacle-avoiding positions
+        positions_data = [(p.x, p.y, p.z) for p in self._grass_points]
+        scales_data = [(p.scale, p.scale, p.scale) for p in self._grass_points]
+
         # include obstacle data for flow deflection
         obstacles_data = [
             {
@@ -881,23 +886,17 @@ import openMASH
 md = openMASH.MASHData(thisNode)
 frame = md.getFrame()
 
+# pre-computed obstacle-avoiding positions
+positions = {positions_data}
+scales = {scales_data}
+
 # wind parameters
 noise_scale = {self.wind.noise_scale}
 wind_strength = {self.wind.wind_strength}
 time_scale = {self.wind.time_scale}
 
-# obstacles for flow deflection and point filtering
+# obstacles for flow deflection
 obstacles = {obstacles_data}
-
-def is_inside_obstacle(x, z):
-    """check if point is inside any obstacle radius."""
-    for obs in obstacles:
-        dx = x - obs["x"]
-        dz = z - obs["z"]
-        dist = math.sqrt(dx*dx + dz*dz)
-        if dist < obs["radius"]:
-            return True
-    return False
 
 def get_obstacle_deflection(x, z, obs):
     dx = x - obs["x"]
@@ -940,19 +939,17 @@ def get_wind_angle(x, z, time):
 
     return math.atan2(vz, vx)
 
-# apply wind to each point, filtering out points inside obstacles
+# apply pre-computed positions and wind animation
 max_lean = {self._max_lean_angle}
-count = md.count()
+count = min(len(positions), md.count())
 for i in range(count):
-    pos = md.outPosition[i]
+    # override MASH position with our obstacle-avoiding position
+    md.outPosition[i] = positions[i]
+    md.outScale[i] = scales[i]
 
-    # filter out grass inside obstacles by setting scale to 0
-    if is_inside_obstacle(pos.x, pos.z):
-        md.outScale[i] = (0, 0, 0)
-        continue
-
-    # apply wind animation to valid grass
-    angle = get_wind_angle(pos.x, pos.z, frame)
+    # apply wind animation
+    x, y, z = positions[i]
+    angle = get_wind_angle(x, z, frame)
     lean_amount = min(max_lean, 15 + 10 * abs(math.sin(angle)))
     md.outRotation[i] = (0, math.degrees(angle), lean_amount)
 
