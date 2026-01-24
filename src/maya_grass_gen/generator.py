@@ -106,6 +106,7 @@ class GrassGenerator:
             "cluster_falloff": 0.5,
             "edge_offset": 10.0,
         }
+        self._max_lean_angle: float = 30.0
 
     @classmethod
     def from_selection(cls) -> GrassGenerator:
@@ -192,6 +193,9 @@ class GrassGenerator:
         noise_scale: float = 0.004,
         wind_strength: float = 2.5,
         time_scale: float = 0.008,
+        octaves: int = 4,
+        persistence: float = 0.5,
+        max_lean_angle: float = 30.0,
     ) -> None:
         """Configure wind field parameters.
 
@@ -199,12 +203,18 @@ class GrassGenerator:
             noise_scale: how fine/coarse the wind pattern is
             wind_strength: magnitude of wind effect
             time_scale: how fast wind pattern evolves
+            octaves: number of noise octaves for wind pattern complexity
+            persistence: how much each octave contributes (roughness)
+            max_lean_angle: maximum grass lean angle in degrees
         """
         self.wind = WindField(
             noise_scale=noise_scale,
             wind_strength=wind_strength,
             time_scale=time_scale,
+            octaves=octaves,
+            persistence=persistence,
         )
+        self._max_lean_angle = max_lean_angle
 
     def load_bump_map(self, image_path: str) -> None:
         """Load bump/displacement map for obstacle detection.
@@ -373,7 +383,7 @@ class GrassGenerator:
             # calculate lean based on wind strength
             wind_x, wind_z = self.wind.get_wind_at(x, z)
             wind_magnitude = math.sqrt(wind_x**2 + wind_z**2)
-            lean_angle = min(30, wind_magnitude * 10)  # max 30 degree lean
+            lean_angle = min(self._max_lean_angle, wind_magnitude * 10)
 
             # random rotation for variety
             base_rotation = rng.uniform(0, 360) if random_rotation else 0
@@ -505,7 +515,7 @@ class GrassGenerator:
             wind_magnitude = math.sqrt(wind_x**2 + wind_z**2)
 
             point.lean_direction = wind_angle
-            point.lean_angle = min(30, wind_magnitude * 10)
+            point.lean_angle = min(self._max_lean_angle, wind_magnitude * 10)
 
     def create_mash_network(
         self,
@@ -837,7 +847,7 @@ for i in range(min(len(positions), len(md.position))):
     vx, vz = get_wind_vector(x, z, frame)
     wind_angle = math.atan2(vz, vx)
     magnitude = math.sqrt(vx*vx + vz*vz)
-    lean_amount = min(30, magnitude * 10)
+    lean_amount = min({self._max_lean_angle}, magnitude * 10)
 
     # combine base rotation with wind-based lean
     md.rotation[i] = (0, base_rotations[i] + math.degrees(wind_angle) * 0.3, lean_amount)
@@ -921,11 +931,12 @@ def get_wind_angle(x, z, time):
     return math.atan2(vz, vx)
 
 # apply wind to each point
+max_lean = {self._max_lean_angle}
 count = md.count()
 for i in range(count):
     pos = md.outPosition[i]
     angle = get_wind_angle(pos.x, pos.z, frame)
-    lean_amount = 15 + 10 * abs(math.sin(angle))
+    lean_amount = min(max_lean, 15 + 10 * abs(math.sin(angle)))
     md.outRotation[i] = (0, math.degrees(angle), lean_amount)
 
 md.setData()

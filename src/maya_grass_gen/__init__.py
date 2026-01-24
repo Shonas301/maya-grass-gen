@@ -124,6 +124,12 @@ def _validate_params(
     scale_variation_wave1: tuple[float, float],
     scale_variation_wave2: tuple[float, float],
     proximity_density_boost: float,
+    min_distance: float,
+    max_lean_angle: float,
+    octaves: int,
+    cluster_falloff: float,
+    edge_offset: float,
+    persistence: float,
 ) -> None:
     """Validate parameter values.
 
@@ -132,11 +138,18 @@ def _validate_params(
         scale_variation_wave1: (min_scale, max_scale) for uniform distribution
         scale_variation_wave2: (min_scale, max_scale) for obstacle-adjacent grass
         proximity_density_boost: density multiplier near obstacles
+        min_distance: minimum distance between grass blades
+        max_lean_angle: maximum grass lean in degrees
+        octaves: wind pattern complexity
+        cluster_falloff: how quickly density drops from obstacle edge
+        edge_offset: distance from obstacle where grass density peaks
+        persistence: wind pattern roughness
 
     Raises:
         ValueError: if count is zero or negative
         ValueError: if scale values are invalid
         ValueError: if proximity_density_boost is less than 1.0
+        ValueError: if other parameters are out of range
     """
     if count <= 0:
         msg = f"count must be positive, got {count}"
@@ -147,6 +160,30 @@ def _validate_params(
 
     if proximity_density_boost < 1.0:
         msg = f"proximity_density_boost must be >= 1.0, got {proximity_density_boost}"
+        raise ValueError(msg)
+
+    if min_distance < 1 or min_distance > 50:
+        msg = f"min_distance must be between 1 and 50, got {min_distance}"
+        raise ValueError(msg)
+
+    if max_lean_angle < 0 or max_lean_angle > 90:
+        msg = f"max_lean_angle must be between 0 and 90, got {max_lean_angle}"
+        raise ValueError(msg)
+
+    if octaves < 1 or octaves > 8:
+        msg = f"octaves must be between 1 and 8, got {octaves}"
+        raise ValueError(msg)
+
+    if cluster_falloff < 0.1 or cluster_falloff > 1.0:
+        msg = f"cluster_falloff must be between 0.1 and 1.0, got {cluster_falloff}"
+        raise ValueError(msg)
+
+    if edge_offset < 1 or edge_offset > 50:
+        msg = f"edge_offset must be between 1 and 50, got {edge_offset}"
+        raise ValueError(msg)
+
+    if persistence < 0.1 or persistence > 1.0:
+        msg = f"persistence must be between 0.1 and 1.0, got {persistence}"
         raise ValueError(msg)
 
 
@@ -181,10 +218,15 @@ def generate_grass(
     scale_variation_wave2: tuple[float, float] = (0.8, 1.2),
     seed: int = 42,
     noise_scale: float = 0.004,
-    octaves: int = 4,  # noqa: ARG001 - reserved for future use
+    octaves: int = 4,
     time_scale: float = 0.008,
     proximity_density_boost: float = 1.0,
     network_name: str | None = None,
+    min_distance: float = 5.0,
+    max_lean_angle: float = 30.0,
+    cluster_falloff: float = 0.5,
+    edge_offset: float = 10.0,
+    persistence: float = 0.5,
 ) -> str:
     """Generate animated grass on a terrain mesh.
 
@@ -209,13 +251,18 @@ def generate_grass(
             adjacent) blade size variation (default: (0.8, 1.2))
         seed: random seed for deterministic results (default: 42)
         noise_scale: how fine/coarse the wind pattern is (default: 0.004)
-        octaves: number of noise octaves for wind (default: 4)
+        octaves: number of noise octaves for wind complexity (default: 4)
         time_scale: how fast wind pattern evolves (default: 0.008)
         proximity_density_boost: multiplier for grass density near obstacles.
             1.0 = no effect (default), 3.0 = 3x density near obstacles.
             Simulates foot traffic avoidance effect.
         network_name: explicit name for the MASH network. if None, generates
             a unique name like grass_mash_001.
+        min_distance: minimum distance between grass blades (default: 5.0)
+        max_lean_angle: maximum grass lean in degrees (default: 30.0)
+        cluster_falloff: how quickly density drops from obstacle edge (default: 0.5)
+        edge_offset: distance from obstacle where grass density peaks (default: 10.0)
+        persistence: wind pattern roughness (default: 0.5)
 
     Returns:
         name of created MASH network for further manipulation
@@ -225,6 +272,7 @@ def generate_grass(
         RuntimeError: if geometry has no faces (invalid mesh)
         ValueError: if count is zero or negative
         ValueError: if scale_variation_wave1 or scale_variation_wave2 has invalid values
+        ValueError: if other parameters are out of valid range
 
     Example:
         >>> from maya_grass import generate_grass
@@ -250,11 +298,27 @@ def generate_grass(
     print(f"  time_scale: {time_scale}")
     print(f"  proximity_density_boost: {proximity_density_boost}")
     print(f"  network_name: {network_name}")
+    print(f"  min_distance: {min_distance}")
+    print(f"  max_lean_angle: {max_lean_angle}")
+    print(f"  cluster_falloff: {cluster_falloff}")
+    print(f"  edge_offset: {edge_offset}")
+    print(f"  persistence: {persistence}")
 
     # validate inputs before doing any work
     _validate_mesh_exists(terrain_mesh, "Terrain mesh")
     _validate_mesh_exists(grass_geometry, "Grass geometry")
-    _validate_params(count, scale_variation_wave1, scale_variation_wave2, proximity_density_boost)
+    _validate_params(
+        count,
+        scale_variation_wave1,
+        scale_variation_wave2,
+        proximity_density_boost,
+        min_distance,
+        max_lean_angle,
+        octaves,
+        cluster_falloff,
+        edge_offset,
+        persistence,
+    )
 
     # initialize noise with seed for deterministic results
     from maya_grass_gen.noise_utils import init_noise
@@ -277,9 +341,13 @@ def generate_grass(
         noise_scale=noise_scale,
         wind_strength=wind_strength,
         time_scale=time_scale,
+        octaves=octaves,
+        persistence=persistence,
+        max_lean_angle=max_lean_angle,
     )
     print(f"wind configured: noise_scale={noise_scale}, wind_strength={wind_strength}, "
-          f"time_scale={time_scale}")
+          f"time_scale={time_scale}, octaves={octaves}, persistence={persistence}, "
+          f"max_lean_angle={max_lean_angle}")
 
     # detect obstacles from scene (exclude terrain and grass geometry)
     obstacle_count = generator.detect_scene_obstacles(
@@ -287,9 +355,12 @@ def generate_grass(
     )
     print(f"detected {obstacle_count} scene obstacles")
 
-    # configure clustering with proximity density boost
+    # configure clustering with proximity density boost and new params
     generator.configure_clustering(
+        min_distance=min_distance,
         obstacle_density_multiplier=proximity_density_boost,
+        cluster_falloff=cluster_falloff,
+        edge_offset=edge_offset,
     )
 
     # generate grass points

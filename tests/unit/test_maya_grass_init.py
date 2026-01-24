@@ -16,87 +16,122 @@ DEFAULT_COUNT = 5000
 DEFAULT_WIND_STRENGTH = 2.5
 DEFAULT_SEED = 42
 
+# new tier 1/2 parameter defaults
+DEFAULT_MIN_DISTANCE = 5.0
+DEFAULT_MAX_LEAN_ANGLE = 30.0
+DEFAULT_OCTAVES = 4
+DEFAULT_CLUSTER_FALLOFF = 0.5
+DEFAULT_EDGE_OFFSET = 10.0
+DEFAULT_PERSISTENCE = 0.5
+
 
 class TestValidateParams:
     """Tests for _validate_params helper function."""
 
+    # helper for common default params (new tier 1/2 params)
+    @staticmethod
+    def _default_tier_params():
+        return (
+            DEFAULT_MIN_DISTANCE,
+            DEFAULT_MAX_LEAN_ANGLE,
+            DEFAULT_OCTAVES,
+            DEFAULT_CLUSTER_FALLOFF,
+            DEFAULT_EDGE_OFFSET,
+            DEFAULT_PERSISTENCE,
+        )
+
     def test_valid_params_pass(self) -> None:
         """Valid parameters should not raise."""
+        defaults = self._default_tier_params()
         # should not raise - both wave params provided
-        _validate_params(5000, (0.8, 1.2), (0.8, 1.2), 1.0)
-        _validate_params(1, (0.1, 2.0), (0.5, 1.5), 1.0)
-        _validate_params(100000, (1.0, 1.0), (1.0, 1.0), 1.0)  # equal min/max is valid
+        _validate_params(5000, (0.8, 1.2), (0.8, 1.2), 1.0, *defaults)
+        _validate_params(1, (0.1, 2.0), (0.5, 1.5), 1.0, *defaults)
+        _validate_params(100000, (1.0, 1.0), (1.0, 1.0), 1.0, *defaults)  # equal min/max is valid
 
     def test_negative_count_raises(self) -> None:
         """Negative count should raise ValueError."""
+        defaults = self._default_tier_params()
         with pytest.raises(ValueError, match="-1"):
-            _validate_params(-1, (0.8, 1.2), (0.8, 1.2), 1.0)
+            _validate_params(-1, (0.8, 1.2), (0.8, 1.2), 1.0, *defaults)
 
     def test_zero_count_raises(self) -> None:
         """Zero count should raise ValueError."""
+        defaults = self._default_tier_params()
         with pytest.raises(ValueError, match="0"):
-            _validate_params(0, (0.8, 1.2), (0.8, 1.2), 1.0)
+            _validate_params(0, (0.8, 1.2), (0.8, 1.2), 1.0, *defaults)
 
     def test_negative_min_scale_raises_wave1(self) -> None:
         """Negative min scale in wave1 should raise ValueError."""
+        defaults = self._default_tier_params()
         with pytest.raises(ValueError, match="scale_variation_wave1.*positive"):
-            _validate_params(5000, (-0.5, 1.2), (0.8, 1.2), 1.0)
+            _validate_params(5000, (-0.5, 1.2), (0.8, 1.2), 1.0, *defaults)
 
     def test_negative_min_scale_raises_wave2(self) -> None:
         """Negative min scale in wave2 should raise ValueError."""
+        defaults = self._default_tier_params()
         with pytest.raises(ValueError, match="scale_variation_wave2.*positive"):
-            _validate_params(5000, (0.8, 1.2), (-0.5, 1.2), 1.0)
+            _validate_params(5000, (0.8, 1.2), (-0.5, 1.2), 1.0, *defaults)
 
     def test_negative_max_scale_raises_wave1(self) -> None:
         """Negative max scale in wave1 should raise ValueError."""
+        defaults = self._default_tier_params()
         with pytest.raises(ValueError, match="scale_variation_wave1.*positive"):
-            _validate_params(5000, (0.8, -1.2), (0.8, 1.2), 1.0)
+            _validate_params(5000, (0.8, -1.2), (0.8, 1.2), 1.0, *defaults)
 
     def test_negative_max_scale_raises_wave2(self) -> None:
         """Negative max scale in wave2 should raise ValueError."""
+        defaults = self._default_tier_params()
         with pytest.raises(ValueError, match="scale_variation_wave2.*positive"):
-            _validate_params(5000, (0.8, 1.2), (0.8, -1.2), 1.0)
+            _validate_params(5000, (0.8, 1.2), (0.8, -1.2), 1.0, *defaults)
 
     def test_zero_min_scale_raises_wave1(self) -> None:
         """Zero min scale in wave1 should raise ValueError."""
+        defaults = self._default_tier_params()
         with pytest.raises(ValueError, match="scale_variation_wave1.*positive"):
-            _validate_params(5000, (0, 1.2), (0.8, 1.2), 1.0)
+            _validate_params(5000, (0, 1.2), (0.8, 1.2), 1.0, *defaults)
 
     def test_zero_min_scale_raises_wave2(self) -> None:
         """Zero min scale in wave2 should raise ValueError."""
+        defaults = self._default_tier_params()
         with pytest.raises(ValueError, match="scale_variation_wave2.*positive"):
-            _validate_params(5000, (0.8, 1.2), (0, 1.2), 1.0)
+            _validate_params(5000, (0.8, 1.2), (0, 1.2), 1.0, *defaults)
 
     def test_zero_max_scale_raises_wave1(self) -> None:
         """Zero max scale in wave1 should raise ValueError."""
+        defaults = self._default_tier_params()
         with pytest.raises(ValueError, match="scale_variation_wave1.*positive"):
-            _validate_params(5000, (0.8, 0), (0.8, 1.2), 1.0)
+            _validate_params(5000, (0.8, 0), (0.8, 1.2), 1.0, *defaults)
 
     def test_zero_max_scale_raises_wave2(self) -> None:
         """Zero max scale in wave2 should raise ValueError."""
+        defaults = self._default_tier_params()
         with pytest.raises(ValueError, match="scale_variation_wave2.*positive"):
-            _validate_params(5000, (0.8, 1.2), (0.8, 0), 1.0)
+            _validate_params(5000, (0.8, 1.2), (0.8, 0), 1.0, *defaults)
 
     def test_inverted_scale_range_raises_wave1(self) -> None:
         """Min scale greater than max in wave1 should raise ValueError."""
+        defaults = self._default_tier_params()
         with pytest.raises(ValueError, match="scale_variation_wave1.*greater than"):
-            _validate_params(5000, (1.5, 0.8), (0.8, 1.2), 1.0)
+            _validate_params(5000, (1.5, 0.8), (0.8, 1.2), 1.0, *defaults)
 
     def test_inverted_scale_range_raises_wave2(self) -> None:
         """Min scale greater than max in wave2 should raise ValueError."""
+        defaults = self._default_tier_params()
         with pytest.raises(ValueError, match="scale_variation_wave2.*greater than"):
-            _validate_params(5000, (0.8, 1.2), (1.5, 0.8), 1.0)
+            _validate_params(5000, (0.8, 1.2), (1.5, 0.8), 1.0, *defaults)
 
     def test_invalid_proximity_density_boost_raises(self) -> None:
         """proximity_density_boost < 1.0 should raise ValueError."""
+        defaults = self._default_tier_params()
         with pytest.raises(ValueError, match="proximity_density_boost"):
-            _validate_params(5000, (0.8, 1.2), (0.8, 1.2), 0.5)
+            _validate_params(5000, (0.8, 1.2), (0.8, 1.2), 0.5, *defaults)
 
     def test_valid_proximity_density_boost_passes(self) -> None:
         """Valid proximity_density_boost values should not raise."""
-        _validate_params(5000, (0.8, 1.2), (0.8, 1.2), 1.0)  # minimum valid
-        _validate_params(5000, (0.8, 1.2), (0.8, 1.2), 3.0)  # typical boost
-        _validate_params(5000, (0.8, 1.2), (0.8, 1.2), 10.0)  # high boost
+        defaults = self._default_tier_params()
+        _validate_params(5000, (0.8, 1.2), (0.8, 1.2), 1.0, *defaults)  # minimum valid
+        _validate_params(5000, (0.8, 1.2), (0.8, 1.2), 3.0, *defaults)  # typical boost
+        _validate_params(5000, (0.8, 1.2), (0.8, 1.2), 10.0, *defaults)  # high boost
 
 
 class TestModuleExports:
@@ -125,8 +160,23 @@ class TestModuleExports:
         assert "grass_geometry" in generate_grass.__doc__
 
 
+def _maya_available() -> bool:
+    """check if real maya is available (not mocked)."""
+    try:
+        import maya.standalone
+        return True
+    except ImportError:
+        return False
+
+
+@pytest.mark.skipif(_maya_available(), reason="test uses mocks, skip when real maya available")
 class TestValidateMeshExists:
-    """Tests for _validate_mesh_exists with mocked maya.cmds."""
+    """Tests for _validate_mesh_exists with mocked maya.cmds.
+
+    These tests use MagicMock to simulate maya.cmds behavior.
+    They are skipped when running under mayapy since the real maya
+    module takes precedence over mocks.
+    """
 
     def setup_method(self) -> None:
         """Set up mock maya modules before each test."""
@@ -205,8 +255,14 @@ class TestValidateMeshExists:
         _validate_mesh_exists("valid_mesh", "terrain")
 
 
+@pytest.mark.skipif(_maya_available(), reason="test uses mocks, skip when real maya available")
 class TestGetUniqueNetworkName:
-    """Tests for _get_unique_network_name helper."""
+    """Tests for _get_unique_network_name helper.
+
+    These tests use MagicMock to simulate maya.cmds behavior.
+    They are skipped when running under mayapy since the real maya
+    module takes precedence over mocks.
+    """
 
     def setup_method(self) -> None:
         """Set up mock maya modules before each test."""
@@ -298,7 +354,11 @@ class TestImportWithoutMaya:
     def test_validate_params_works_without_maya(self) -> None:
         """_validate_params should work without Maya (no maya imports)."""
         # this function shouldn't need maya at all
-        _validate_params(1000, (0.5, 1.5), (0.5, 1.5), 1.0)  # should not raise
+        _validate_params(
+            1000, (0.5, 1.5), (0.5, 1.5), 1.0,
+            DEFAULT_MIN_DISTANCE, DEFAULT_MAX_LEAN_ANGLE, DEFAULT_OCTAVES,
+            DEFAULT_CLUSTER_FALLOFF, DEFAULT_EDGE_OFFSET, DEFAULT_PERSISTENCE,
+        )  # should not raise
 
     def test_module_docstring_exists(self) -> None:
         """Module should have a docstring with usage examples."""

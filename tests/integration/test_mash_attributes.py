@@ -43,6 +43,23 @@ def maya_session():
     # don't uninitialize - causes issues with multiple test runs
 
 
+@pytest.fixture
+def test_geometry(maya_session):
+    """create test geometry for MASH network tests.
+
+    MASH requires selected geometry when using 'Repro' mode.
+    """
+    from maya import cmds
+
+    # create a simple cube as test geometry
+    cube = cmds.polyCube(name="test_mash_geo")[0]
+    cmds.select(cube)
+    yield cube
+    # cleanup
+    if cmds.objExists(cube):
+        cmds.delete(cube)
+
+
 _attr_test_counter = 0
 
 
@@ -62,6 +79,10 @@ def get_mash_node_attributes(node_type: str) -> set[str]:
     _attr_test_counter += 1
     network_name = f"attr_test_{_attr_test_counter}"
 
+    # create test geometry - MASH requires selected geometry for 'Repro' mode
+    test_cube = cmds.polyCube(name=f"attr_test_geo_{_attr_test_counter}")[0]
+    cmds.select(test_cube)
+
     # create a temporary network to get a node instance
     network = mapi.Network()
     network.createNetwork(name=network_name, geometry="Repro")
@@ -75,10 +96,12 @@ def get_mash_node_attributes(node_type: str) -> set[str]:
         attrs = set(cmds.listAttr(node_name) or [])
         return attrs
     finally:
-        # cleanup - find and delete the waiter node
+        # cleanup - find and delete the waiter node and test geometry
         waiters = cmds.ls(f"{network_name}*", type="MASH_Waiter") or []
         if waiters:
             cmds.delete(waiters[0])
+        if cmds.objExists(test_cube):
+            cmds.delete(test_cube)
 
 
 def extract_setattr_calls(filepath: Path) -> list[tuple[str, str, int]]:
@@ -189,11 +212,12 @@ class TestMASHAttributeValidation:
 class TestMASHNodeCreation:
     """tests for MASH network creation."""
 
-    def test_can_create_mash_network(self, maya_session):
+    def test_can_create_mash_network(self, test_geometry):
         """verify we can create a basic MASH network."""
         from maya import cmds
         import MASH.api as mapi
 
+        # test_geometry fixture already creates and selects a cube
         network = mapi.Network()
         network.createNetwork(name="test_create_network", geometry="Repro")
 
@@ -207,11 +231,12 @@ class TestMASHNodeCreation:
             if waiters:
                 cmds.delete(waiters[0])
 
-    def test_can_add_random_node(self, maya_session):
+    def test_can_add_random_node(self, test_geometry):
         """verify we can add and configure a MASH_Random node."""
         from maya import cmds
         import MASH.api as mapi
 
+        # test_geometry fixture already creates and selects a cube
         network = mapi.Network()
         network.createNetwork(name="test_random_network", geometry="Repro")
 
@@ -235,11 +260,12 @@ class TestMASHNodeCreation:
             if waiters:
                 cmds.delete(waiters[0])
 
-    def test_can_add_offset_node(self, maya_session):
+    def test_can_add_offset_node(self, test_geometry):
         """verify we can add and configure a MASH_Offset node."""
         from maya import cmds
         import MASH.api as mapi
 
+        # test_geometry fixture already creates and selects a cube
         network = mapi.Network()
         network.createNetwork(name="test_offset_network", geometry="Repro")
 
