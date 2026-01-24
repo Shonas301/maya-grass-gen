@@ -423,10 +423,10 @@ class TestGrassGenerator:
         # when
         gen.generate_points(count=500, seed=42)
 
-        # then - no points inside obstacle
+        # then - no points inside hard exclusion zone (85% of radius)
         for p in gen.grass_points:
             dist = math.sqrt((p.x - 50) ** 2 + (p.z - 50) ** 2)
-            assert dist >= 20
+            assert dist >= 20 * 0.85
 
     def test_update_wind_time(self) -> None:
         """test updating wind animation time."""
@@ -892,9 +892,10 @@ class TestDensityGradient:
             d = clusterer.get_density_at(float(dist), 0)
             densities.append((dist, d))
 
-        # inside obstacle should be 0
-        inside = [d for dist, d in densities if dist < 50]
-        assert all(d == 0 for d in inside), "density inside obstacle should be 0"
+        # inside hard exclusion zone (85% of radius) should be 0
+        inner_radius = 50 * 0.85
+        inside = [d for dist, d in densities if dist < inner_radius]
+        assert all(d == 0 for d in inside), "density inside hard exclusion should be 0"
 
         # just outside should be elevated (near edge_offset=10 from edge)
         near_edge = [d for dist, d in densities if 50 < dist < 70]

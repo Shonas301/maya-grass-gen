@@ -292,6 +292,8 @@ class PointClusterer:
         """Calculate point density at a position.
 
         density is higher near obstacle edges and falls off with distance.
+        the exclusion zone uses a fuzzy boundary with angular noise so the
+        edge isn't a perfect circle.
 
         Args:
             x: x position
@@ -311,9 +313,25 @@ class PointClusterer:
             dy = y - obstacle.y
             dist = np.sqrt(dx**2 + dy**2)
 
-            # skip if inside obstacle
+            # hard exclusion at 85% of radius (tighter to actual geometry)
+            inner_radius = obstacle.radius * 0.85
+            if dist < inner_radius:
+                return 0.0
+
+            # fuzzy transition zone between 85%-100% of radius
+            # uses angular noise so the boundary isn't a perfect circle
             if dist < obstacle.radius:
-                return 0.0  # no points inside obstacles
+                angle = np.arctan2(dy, dx)
+                # simple hash-based noise from angle and obstacle position
+                noise_val = np.sin(angle * 7.0 + obstacle.x * 0.1) * 0.5 + 0.5
+                # ramp from 0 at inner_radius to low density at obstacle.radius
+                t = (dist - inner_radius) / (obstacle.radius - inner_radius)
+                # only let some points through based on noise
+                if t < noise_val * 0.6:
+                    return 0.0
+                # surviving points get reduced density
+                density *= t * 0.3
+                continue
 
             # distance from obstacle edge
             edge_dist = dist - obstacle.radius
@@ -348,12 +366,12 @@ class PointClusterer:
         if x < 0 or x > self.width or y < 0 or y > self.height:
             return False
 
-        # check obstacle collision
+        # check obstacle collision (use tighter 85% radius)
         for obstacle in self.obstacles:
             dx = x - obstacle.x
             dy = y - obstacle.y
             dist = np.sqrt(dx**2 + dy**2)
-            if dist < obstacle.radius:
+            if dist < obstacle.radius * 0.85:
                 return False
 
         # check minimum distance from existing points
