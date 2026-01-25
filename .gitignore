@@ -49,6 +49,7 @@ outputs/
 # progress tracking
 progress.md
 .planning
+.thinking
 mayapy
 *.txt
 .DS_store
