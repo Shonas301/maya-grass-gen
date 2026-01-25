@@ -559,7 +559,7 @@ class GrassGenerator:
 
             # generate animated wind code that recalculates rotation each frame
             wind_code = self._generate_point_based_wind_code()
-            cmds.setAttr(f"{python_node_name}.pythonCode", wind_code, type="string")
+            cmds.setAttr(f"{python_node_name}.pyScript", wind_code, type="string")
         except RuntimeError as e:
             msg = f"failed to create MASH network '{network_name}': {e}"
             raise RuntimeError(msg) from e
@@ -685,26 +685,17 @@ class GrassGenerator:
 
             print(f"using python node: {python_node_name}")
 
-            # debug: inspect the python node thoroughly
-            if cmds.objExists(python_node_name):
-                node_type = cmds.nodeType(python_node_name)
-                print(f"  node type: {node_type}")
-                attrs = cmds.listAttr(python_node_name) or []
-                print(f"  total attrs: {len(attrs)}")
-                print(f"  first 20 attrs: {attrs[:20]}")
-                has_python_code = "pythonCode" in attrs
-                print(f"  pythonCode attr exists: {has_python_code}")
-                if not has_python_code:
-                    # look for any attr with 'code', 'script', or 'python'
-                    code_attrs = [a for a in attrs if any(k in a.lower() for k in ['code', 'script', 'python'])]
-                    print(f"  code/script/python attrs: {code_attrs}")
-            else:
-                print(f"  ERROR: node {python_node_name} does not exist!")
+            # verify python node exists and has pyScript attr
+            if not cmds.objExists(python_node_name):
+                raise RuntimeError(f"python node {python_node_name} does not exist")
+            attrs = cmds.listAttr(python_node_name) or []
+            if "pyScript" not in attrs:
+                raise RuntimeError(f"python node {python_node_name} missing pyScript attr")
 
             # generate wind expression that updates with time
             wind_code = self._generate_wind_python_code()
             print(f"setting python code ({len(wind_code)} chars) on {python_node_name}")
-            cmds.setAttr(f"{python_node_name}.pythonCode", wind_code, type="string")
+            cmds.setAttr(f"{python_node_name}.pyScript", wind_code, type="string")
         except RuntimeError as e:
             msg = f"failed to create mesh-distributed MASH network '{network_name}': {e}"
             raise RuntimeError(msg) from e
