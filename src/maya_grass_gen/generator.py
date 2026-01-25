@@ -325,7 +325,8 @@ class GrassGenerator:
         seed: int | None = None,
         height: float = 0.0,
         random_rotation: bool = True,
-        scale_variation: float = 0.2,
+        scale_variation_wave1: float = 0.2,
+        scale_variation_wave2: float = 0.2,
     ) -> int:
         """Generate grass point positions.
 
@@ -334,7 +335,8 @@ class GrassGenerator:
             seed: random seed for reproducibility
             height: base y height for all points
             random_rotation: randomize initial rotation
-            scale_variation: random scale variation (0-1)
+            scale_variation_wave1: scale variation for uniform distribution (0-1)
+            scale_variation_wave2: scale variation for obstacle-adjacent grass (0-1)
 
         Returns:
             actual number of points generated
@@ -348,14 +350,19 @@ class GrassGenerator:
 
         rng = np.random.default_rng(seed)
 
+        # track which wave is used for scale variation
         if CLUSTERING_AVAILABLE and self.terrain.obstacles:
-            # use clustered point generation
+            # use clustered point generation (wave 2)
             print(f"using clustered point generation ({len(self.terrain.obstacles)} obstacles)")
             points = self._generate_clustered_points(count, seed)
+            scale_variation = scale_variation_wave2
+            print(f"using wave 2 scale variation: {scale_variation}")
         else:
-            # fall back to uniform random distribution
+            # fall back to uniform random distribution (wave 1)
             print("using uniform point generation (no obstacles)")
             points = self._generate_uniform_points(count, rng)
+            scale_variation = scale_variation_wave1
+            print(f"using wave 1 scale variation: {scale_variation}")
 
         # convert to grass points with wind orientation
         self._grass_points = []
@@ -371,7 +378,7 @@ class GrassGenerator:
             # random rotation for variety
             base_rotation = rng.uniform(0, 360) if random_rotation else 0
 
-            # random scale
+            # random scale using the appropriate wave's variation
             scale = 1.0 + rng.uniform(-scale_variation, scale_variation)
 
             self._grass_points.append(
