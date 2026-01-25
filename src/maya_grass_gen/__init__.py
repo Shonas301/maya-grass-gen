@@ -227,6 +227,7 @@ def generate_grass(
     cluster_falloff: float = 0.5,
     edge_offset: float = 10.0,
     persistence: float = 0.5,
+    gravity_weight: float = 0.75,
 ) -> str:
     """Generate animated grass on a terrain mesh.
 
@@ -263,6 +264,9 @@ def generate_grass(
         cluster_falloff: how quickly density drops from obstacle edge (default: 0.5)
         edge_offset: distance from obstacle where grass density peaks (default: 10.0)
         persistence: wind pattern roughness (default: 0.5)
+        gravity_weight: blend between surface normal and world-up for grass
+            orientation on slopes. 0.0 = perpendicular to surface, 1.0 = always
+            vertical, 0.75 = mostly vertical with slight terrain influence (default)
 
     Returns:
         name of created MASH network for further manipulation
@@ -303,6 +307,7 @@ def generate_grass(
     print(f"  cluster_falloff: {cluster_falloff}")
     print(f"  edge_offset: {edge_offset}")
     print(f"  persistence: {persistence}")
+    print(f"  gravity_weight: {gravity_weight}")
 
     # validate inputs before doing any work
     _validate_mesh_exists(terrain_mesh, "Terrain mesh")
@@ -348,6 +353,9 @@ def generate_grass(
     print(f"wind configured: noise_scale={noise_scale}, wind_strength={wind_strength}, "
           f"time_scale={time_scale}, octaves={octaves}, persistence={persistence}, "
           f"max_lean_angle={max_lean_angle}")
+
+    # configure terrain-aware grass orientation
+    generator.set_gravity_weight(gravity_weight)
 
     # detect obstacles from scene (exclude terrain and grass geometry)
     obstacle_count = generator.detect_scene_obstacles(

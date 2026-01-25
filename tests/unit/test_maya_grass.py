@@ -904,3 +904,124 @@ class TestDensityGradient:
         # far away should approach 1.0
         far = [d for dist, d in densities if dist > 150]
         assert all(abs(d - 1.0) < 0.1 for d in far), "density far from obstacle should be ~1.0"
+
+
+class TestTerrainTilt:
+    """tests for gravity-blended terrain normal orientation."""
+
+    def test_gravity_weight_default(self) -> None:
+        """test that default gravity weight is 0.75."""
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        assert gen._gravity_weight == 0.75
+
+    def test_set_gravity_weight_clamps(self) -> None:
+        """test that gravity weight is clamped to [0, 1]."""
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.set_gravity_weight(-0.5)
+        assert gen._gravity_weight == 0.0
+        gen.set_gravity_weight(1.5)
+        assert gen._gravity_weight == 1.0
+        gen.set_gravity_weight(0.5)
+        assert gen._gravity_weight == 0.5
+
+    def test_compute_terrain_tilts_no_maya(self) -> None:
+        """test that without maya, terrain tilts default to zero."""
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=10, seed=42)
+        gen._compute_terrain_tilts("fake_mesh")
+        assert len(gen._terrain_tilts) == len(gen._grass_points)
+        assert all(t == (0.0, 0.0) for t in gen._terrain_tilts)
+
+    def test_compute_terrain_tilts_full_gravity(self) -> None:
+        """test that gravity_weight=1.0 produces zero tilt (pure world-up)."""
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=10, seed=42)
+        gen.set_gravity_weight(1.0)
+        gen._compute_terrain_tilts("fake_mesh")
+        assert all(t == (0.0, 0.0) for t in gen._terrain_tilts)
+
+    def test_tilt_math_flat_ground(self) -> None:
+        """test the gravity blend math: flat ground (normal = up) gives zero tilt."""
+        # simulate the math directly
+        import numpy as np
+        nx, ny, nz = 0.0, 1.0, 0.0  # flat ground normal
+        g = 0.75
+        dx = (1 - g) * nx + 0.0
+        dy = (1 - g) * ny + g * 1.0
+        dz = (1 - g) * nz + 0.0
+        length = math.sqrt(dx**2 + dy**2 + dz**2)
+        dy_hat = dy / length
+        tilt_angle = math.degrees(math.acos(dy_hat))
+        assert abs(tilt_angle) < 0.01, f"flat ground should give ~0 tilt, got {tilt_angle}"
+
+    def test_tilt_math_45_degree_slope(self) -> None:
+        """test the gravity blend math: 45deg slope with g=0.75 gives ~11.25deg tilt."""
+        import numpy as np
+        # normal for 45deg slope tilted in +X direction
+        angle_rad = math.radians(45)
+        nx = math.sin(angle_rad)  # ~0.707
+        ny = math.cos(angle_rad)  # ~0.707
+        nz = 0.0
+        g = 0.75
+        dx = (1 - g) * nx
+        dy = (1 - g) * ny + g * 1.0
+        dz = (1 - g) * nz
+        length = math.sqrt(dx**2 + dy**2 + dz**2)
+        dx_hat = dx / length
+        dy_hat = dy / length
+        dz_hat = dz / length
+        tilt_angle = math.degrees(math.acos(max(-1.0, min(1.0, dy_hat))))
+        # with g=0.75, expected tilt is roughly (1-0.75)*45 = 11.25 degrees
+        assert 8.0 < tilt_angle < 15.0, f"expected ~11.25deg tilt, got {tilt_angle}"
+
+    def test_tilt_math_pure_normal(self) -> None:
+        """test that g=0 gives tilt equal to slope angle."""
+        angle_rad = math.radians(30)
+        nx = math.sin(angle_rad)
+        ny = math.cos(angle_rad)
+        nz = 0.0
+        g = 0.0
+        dx = (1 - g) * nx
+        dy = (1 - g) * ny + g * 1.0
+        dz = (1 - g) * nz
+        length = math.sqrt(dx**2 + dy**2 + dz**2)
+        dy_hat = dy / length
+        tilt_angle = math.degrees(math.acos(max(-1.0, min(1.0, dy_hat))))
+        # with g=0, tilt should equal the slope angle (30deg)
+        assert abs(tilt_angle - 30.0) < 0.1, f"g=0 should give slope angle, got {tilt_angle}"
+
+    def test_tilt_direction_uses_atan2_dz_dx(self) -> None:
+        """test that tilt direction uses atan2(dz, dx) convention."""
+        # slope tilted purely in +X direction
+        angle_rad = math.radians(30)
+        nx = math.sin(angle_rad)
+        ny = math.cos(angle_rad)
+        nz = 0.0
+        g = 0.5
+        dx = (1 - g) * nx
+        dy = (1 - g) * ny + g * 1.0
+        dz = (1 - g) * nz
+        length = math.sqrt(dx**2 + dy**2 + dz**2)
+        dx_hat = dx / length
+        dz_hat = dz / length
+        tilt_dir = math.degrees(math.atan2(dz_hat, dx_hat))
+        # slope is in +X, so direction should be ~0 degrees (atan2(0, positive) = 0)
+        assert abs(tilt_dir) < 0.1, f"expected ~0deg direction for +X slope, got {tilt_dir}"
+
+    def test_python_node_code_has_terrain_tilts(self) -> None:
+        """test that generated python node code includes terrain_tilts data."""
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=10, seed=42)
+        gen._terrain_tilts = [(5.0, 45.0)] * 10
+        code = gen._generate_wind_python_code()
+        assert "terrain_tilts" in code
+        assert "tilt_angle, tilt_dir = terrain_tilts[i]" in code
+
+    def test_point_based_code_has_terrain_tilts(self) -> None:
+        """test that point-based python node code includes terrain_tilts data."""
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=10, seed=42)
+        gen._terrain_tilts = [(5.0, 45.0)] * 10
+        code = gen._generate_point_based_wind_code()
+        assert "terrain_tilts" in code
+        assert "tilt_angle, tilt_dir = terrain_tilts[i]" in code

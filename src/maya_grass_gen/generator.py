@@ -107,6 +107,10 @@ class GrassGenerator:
             "edge_offset": 10.0,
         }
         self._max_lean_angle: float = 30.0
+        self._gravity_weight: float = 0.75
+        # per-point terrain tilt data: list of (tilt_angle_deg, tilt_direction_deg)
+        # computed at network creation time from terrain normals
+        self._terrain_tilts: list[tuple[float, float]] = []
 
     @classmethod
     def from_selection(cls) -> GrassGenerator:
@@ -215,6 +219,104 @@ class GrassGenerator:
             persistence=persistence,
         )
         self._max_lean_angle = max_lean_angle
+
+    def set_gravity_weight(self, weight: float) -> None:
+        """Set gravity weight for terrain-normal grass orientation.
+
+        controls how grass blades orient on slopes. real grass exhibits
+        gravitropism: roots anchor in the surface but blades grow toward
+        the sky. this parameter blends between surface-normal alignment
+        and world-up.
+
+        Args:
+            weight: blend factor between 0 and 1.
+                0.0 = pure surface normal (grass perpendicular to slope)
+                1.0 = pure world up (grass always vertical, ignores terrain)
+                0.75 = default (mostly vertical, slight terrain influence)
+        """
+        self._gravity_weight = max(0.0, min(1.0, weight))
+
+    def _compute_terrain_tilts(self, terrain_mesh: str) -> None:
+        """Query terrain normals and compute per-point tilt angles.
+
+        uses maya's MFnMesh to get the surface normal at each grass point
+        position, then blends with world-up using gravity_weight to get
+        the effective growth direction. decomposes into tilt_angle (from
+        vertical) and tilt_direction (azimuth on XZ plane).
+
+        math:
+            D = (1 - g) * N + g * U    where N = surface normal, U = (0,1,0)
+            D_hat = D / |D|
+            tilt_angle = acos(D_hat.y)
+            tilt_direction = atan2(D_hat.z, D_hat.x)
+
+        Args:
+            terrain_mesh: name of the terrain mesh to query normals from
+        """
+        if not MAYA_AVAILABLE:
+            # no maya, no normals -- all tilts stay at zero
+            self._terrain_tilts = [(0.0, 0.0)] * len(self._grass_points)
+            return
+
+        if self._gravity_weight >= 1.0:
+            # pure world-up, no terrain influence needed
+            self._terrain_tilts = [(0.0, 0.0)] * len(self._grass_points)
+            return
+
+        try:
+            import maya.api.OpenMaya as om2
+
+            # get the terrain mesh's dag path
+            sel = om2.MSelectionList()
+            sel.add(terrain_mesh)
+            dag_path = sel.getDagPath(0)
+            mesh_fn = om2.MFnMesh(dag_path)
+        except Exception:
+            # maya API not functional (mocked or unavailable)
+            print(f"[terrain tilt] maya API unavailable, using zero tilts")
+            self._terrain_tilts = [(0.0, 0.0)] * len(self._grass_points)
+            return
+
+        g = self._gravity_weight
+        world_up = om2.MVector(0, 1, 0)
+
+        tilts = []
+        for point in self._grass_points:
+            try:
+                # find closest point on mesh and get its normal
+                query_point = om2.MPoint(point.x, point.y, point.z)
+                _closest, normal = mesh_fn.getClosestPointAndNormal(
+                    query_point, om2.MSpace.kWorld,
+                )
+
+                # blend normal with world-up: D = (1-g)*N + g*U
+                normal_vec = om2.MVector(normal)
+                blended = normal_vec * (1.0 - g) + world_up * g
+
+                # normalize
+                length = blended.length()
+                if length < 1e-8:
+                    tilts.append((0.0, 0.0))
+                    continue
+                d_hat = blended / length
+
+                # decompose: tilt_angle = acos(Dy), tilt_direction = atan2(Dz, Dx)
+                tilt_angle = math.degrees(math.acos(max(-1.0, min(1.0, d_hat.y))))
+                tilt_direction = math.degrees(math.atan2(d_hat.z, d_hat.x))
+
+                tilts.append((tilt_angle, tilt_direction))
+            except Exception:
+                tilts.append((0.0, 0.0))
+
+        self._terrain_tilts = tilts
+        print(f"[terrain tilt] computed {len(tilts)} normals "
+              f"(gravity_weight={g:.2f})")
+
+        if tilts:
+            angles = [t[0] for t in tilts]
+            print(f"[terrain tilt] angle range: "
+                  f"min={min(angles):.1f}deg, max={max(angles):.1f}deg, "
+                  f"mean={sum(angles)/len(angles):.1f}deg")
 
     def load_bump_map(self, image_path: str) -> None:
         """Load bump/displacement map for obstacle detection.
@@ -550,6 +652,13 @@ class GrassGenerator:
 
         print(f"creating MASH network '{network_name}'")
 
+        # compute terrain normals for slope-aware grass orientation
+        target_mesh = terrain_mesh or self.terrain.mesh_name
+        if target_mesh:
+            self._compute_terrain_tilts(target_mesh)
+        else:
+            self._terrain_tilts = [(0.0, 0.0)] * len(self._grass_points)
+
         # create MASH network
         import MASH.api as mapi
 
@@ -736,6 +845,7 @@ class GrassGenerator:
         positions_data = [(p.x, p.y, p.z) for p in self._grass_points]
         scales_data = [(p.scale, p.scale, p.scale) for p in self._grass_points]
         base_rotations = [p.rotation_y for p in self._grass_points]
+        terrain_tilts_data = list(self._terrain_tilts) if self._terrain_tilts else [(0.0, 0.0)] * len(self._grass_points)
 
         # obstacle data for flow deflection and visibility filtering
         obstacles_data = [
@@ -761,6 +871,9 @@ frame = md.getFrame()
 positions = {positions_data}
 scales = {scales_data}
 base_rotations = {base_rotations}
+# per-point terrain tilt: (tilt_angle_deg, tilt_direction_deg)
+# computed from gravity-blended surface normals
+terrain_tilts = {terrain_tilts_data}
 
 # wind parameters
 noise_scale = {self.wind.noise_scale}
@@ -856,8 +969,13 @@ for i in range(count):
     magnitude = math.sqrt(vx*vx + vz*vz)
     lean_amount = min({self._max_lean_angle}, magnitude * 10)
 
-    # combine base rotation with wind-based lean
-    md.outRotation[i] = (lean_amount, base_rotations[i] + math.degrees(wind_angle) * 0.3, 0)
+    # combine terrain tilt + wind lean
+    # terrain tilt is the static slope-aware base orientation
+    # wind lean is added on top for animation
+    tilt_angle, tilt_dir = terrain_tilts[i]
+    rx = tilt_angle + lean_amount
+    ry = tilt_dir + base_rotations[i] + math.degrees(wind_angle) * 0.3
+    md.outRotation[i] = (rx, ry, 0)
 
 md.setData()
 '''
@@ -877,6 +995,7 @@ md.setData()
         # pre-computed obstacle-avoiding positions and scales
         positions_data = [(p.x, p.y, p.z) for p in self._grass_points]
         scales_data = [(p.scale, p.scale, p.scale) for p in self._grass_points]
+        terrain_tilts_data = list(self._terrain_tilts) if self._terrain_tilts else [(0.0, 0.0)] * len(self._grass_points)
 
         # include obstacle data for flow deflection and visibility filtering
         obstacles_data = [
@@ -902,6 +1021,9 @@ frame = md.getFrame()
 # pre-computed obstacle-avoiding positions and per-point scales
 positions = {positions_data}
 scales = {scales_data}
+# per-point terrain tilt: (tilt_angle_deg, tilt_direction_deg)
+# computed from gravity-blended surface normals
+terrain_tilts = {terrain_tilts_data}
 
 # wind parameters
 noise_scale = {self.wind.noise_scale}
@@ -997,7 +1119,12 @@ for i in range(count):
     # apply wind animation
     angle = get_wind_angle(x, z, frame)
     lean_amount = min(max_lean, 15 + 10 * abs(math.sin(angle)))
-    md.outRotation[i] = (lean_amount, math.degrees(angle), 0)
+
+    # combine terrain tilt + wind lean
+    tilt_angle, tilt_dir = terrain_tilts[i]
+    rx = tilt_angle + lean_amount
+    ry = tilt_dir + math.degrees(angle)
+    md.outRotation[i] = (rx, ry, 0)
 
 md.setData()
 '''

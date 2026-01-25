@@ -120,6 +120,7 @@ def execute_grass_generation(*args) -> None:
     min_distance = cmds.floatSliderGrp("min_distance_field", query=True, value=True)
     cluster_falloff = cmds.floatSliderGrp("cluster_falloff_field", query=True, value=True)
     edge_offset = cmds.floatSliderGrp("edge_offset_field", query=True, value=True)
+    gravity_weight = cmds.floatSliderGrp("gravity_weight_field", query=True, value=True)
 
     # save all preferences
     save_pref("terrain", terrain)
@@ -140,6 +141,7 @@ def execute_grass_generation(*args) -> None:
     save_pref("min_distance", min_distance)
     save_pref("cluster_falloff", cluster_falloff)
     save_pref("edge_offset", edge_offset)
+    save_pref("gravity_weight", gravity_weight)
 
     # execute generation
     try:
@@ -162,6 +164,7 @@ def execute_grass_generation(*args) -> None:
             cluster_falloff=cluster_falloff,
             edge_offset=edge_offset,
             persistence=persistence,
+            gravity_weight=gravity_weight,
         )
 
         # show success message
@@ -330,6 +333,18 @@ def show_grass_ui() -> None:
         value1=load_pref("seed", 42),
         columnWidth2=(100, 100),
         annotation="Seed for random number generation. Same seed = same grass layout. Change to get a different distribution.",
+    )
+
+    cmds.floatSliderGrp(
+        "gravity_weight_field",
+        label="Gravity Weight:",
+        field=True,
+        minValue=0.0,
+        maxValue=1.0,
+        value=load_pref("gravity_weight", 0.75),
+        precision=2,
+        columnWidth3=(100, 50, 250),
+        annotation="How much grass grows toward the sky vs perpendicular to the terrain. 0 = follows surface normal, 1 = always vertical, 0.75 = mostly vertical with slope awareness.",
     )
 
     cmds.setParent('..')  # exit columnLayout
