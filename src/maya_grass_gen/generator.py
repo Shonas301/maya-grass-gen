@@ -664,8 +664,35 @@ class GrassGenerator:
 
             # add python node for wind-based orientation
             python_node = mash_network.addNode("MASH_Python")
-            python_node_name = python_node.name
-            print(f"added python node: {python_node_name}")
+            wrapper_name = python_node.name
+            print(f"python node wrapper reports: {wrapper_name}")
+
+            # find the actual python node (wrapper.name may have numeric suffix)
+            all_pythons = cmds.ls(type="MASH_Python") or []
+            matching = [p for p in all_pythons if p.startswith(waiter_name)]
+            print(f"MASH_Python nodes matching '{waiter_name}': {matching}")
+
+            # prefer node without trailing digit, fallback to first match
+            python_node_name = None
+            for p in matching:
+                if not p[-1].isdigit():
+                    python_node_name = p
+                    break
+            if not python_node_name and matching:
+                python_node_name = matching[0]
+            if not python_node_name:
+                python_node_name = wrapper_name  # last resort
+
+            print(f"using python node: {python_node_name}")
+
+            # verify pythonCode attr exists
+            if cmds.objExists(python_node_name):
+                attrs = cmds.listAttr(python_node_name) or []
+                has_python_code = "pythonCode" in attrs
+                print(f"  pythonCode attr exists: {has_python_code}")
+                if not has_python_code:
+                    python_attrs = [a for a in attrs if "python" in a.lower()]
+                    print(f"  python-related attrs: {python_attrs}")
 
             # generate wind expression that updates with time
             wind_code = self._generate_wind_python_code()
