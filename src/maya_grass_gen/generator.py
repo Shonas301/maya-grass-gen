@@ -692,8 +692,8 @@ class GrassGenerator:
                 cmds.setAttr(f"{random_name}.rotationZ", 0)
 
                 # set scale variation (uniform scale for grass)
-                # scaleUniform=True makes scaleX apply to all axes
-                cmds.setAttr(f"{random_name}.scaleUniform", True)
+                # uniformScale=True makes scaleX apply to all axes
+                cmds.setAttr(f"{random_name}.uniformScale", True)
                 cmds.setAttr(f"{random_name}.scaleX", scale_variation)
 
                 # note: MASH Random adds/subtracts from base scale of 1.0
