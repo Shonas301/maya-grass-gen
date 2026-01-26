@@ -50,3 +50,5 @@ outputs/
 progress.md
 .planning
 mayapy
+*.txt
+.DS_store
