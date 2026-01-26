@@ -580,13 +580,12 @@ class GrassGenerator:
         """Resolve actual Maya node name from MASH node wrapper.
 
         The MASH API addNode() returns a wrapper object whose .name property
-        may not match the actual Maya node name. This function tries multiple
-        approaches to find the correct name.
+        contains the actual Maya node name.
 
         Args:
             node_wrapper: object returned by mash_network.addNode()
             node_type: type hint for error messages (e.g., "Distribute", "Python")
-            network_name: name of the MASH network (used to filter matching nodes)
+            network_name: name of the MASH network (unused, kept for compatibility)
 
         Returns:
             actual Maya node name as string
@@ -597,61 +596,27 @@ class GrassGenerator:
         # force scene to evaluate so new nodes are visible
         cmds.refresh(force=True)
 
-        print(f"_get_mash_node_name: resolving {node_type} node, network={network_name}")
-        print(f"  wrapper type: {type(node_wrapper)}")
-        print(f"  wrapper dir: {[a for a in dir(node_wrapper) if not a.startswith('_')]}")
-
-        # prefer finding by type - this is most reliable for MASH nodes
-        # the wrapper methods often return names that don't match the actual DG node
-        pattern = f"*MASH_{node_type}*"
-        matches = cmds.ls(pattern, type=f"MASH_{node_type}") or []
-        print(f"  ls pattern '{pattern}' type 'MASH_{node_type}': {matches}")
-
-        # filter to only nodes that match our network name prefix
-        if network_name and matches:
-            filtered = [m for m in matches if m.startswith(network_name)]
-            print(f"  filtered by prefix '{network_name}': {filtered}")
-            if filtered:
-                matches = filtered
-
-        if matches:
-            # return most recently created (last in list)
-            result = matches[-1]
-            print(f"  returning from type search: {result}")
-            return result
-
-        # fallback: try getNodeName() method (MASH API)
-        if hasattr(node_wrapper, 'getNodeName'):
-            name = node_wrapper.getNodeName()
-            print(f"  getNodeName() returned: {name}")
-            if name and cmds.objExists(name):
-                # verify it's actually a MASH node with the expected type
-                node_type_check = cmds.nodeType(name)
-                print(f"  nodeType of '{name}': {node_type_check}")
-                if node_type_check == f"MASH_{node_type}":
-                    return name
-
-        # fallback: try .name property
+        # the wrapper's .name property contains the correct node name
         if hasattr(node_wrapper, 'name'):
             name = node_wrapper.name
-            print(f"  .name property: {name}")
             if name and cmds.objExists(name):
-                node_type_check = cmds.nodeType(name)
-                print(f"  nodeType of '{name}': {node_type_check}")
-                if node_type_check == f"MASH_{node_type}":
-                    return name
+                return name
 
-        # fallback: try string conversion
-        try:
-            name = str(node_wrapper)
-            print(f"  str() conversion: {name}")
+        # fallback: try getNodeName() method
+        if hasattr(node_wrapper, 'getNodeName'):
+            name = node_wrapper.getNodeName()
             if name and cmds.objExists(name):
-                node_type_check = cmds.nodeType(name)
-                print(f"  nodeType of '{name}': {node_type_check}")
-                if node_type_check == f"MASH_{node_type}":
-                    return name
-        except (TypeError, ValueError):
-            pass
+                return name
+
+        # fallback: search by type pattern
+        pattern = f"*{node_type}*"
+        matches = cmds.ls(pattern, type=f"MASH_{node_type}") or []
+        if network_name and matches:
+            filtered = [m for m in matches if m.startswith(network_name)]
+            if filtered:
+                matches = filtered
+        if matches:
+            return matches[-1]
 
         msg = f"could not resolve MASH {node_type} node name from wrapper"
         raise RuntimeError(msg)
@@ -714,8 +679,8 @@ class GrassGenerator:
                 cmds.setAttr(f"{random_name}.rotationZ", 0)
 
                 # set scale variation (uniform scale for grass)
-                # uniformScale=True makes scaleX apply to all axes
-                cmds.setAttr(f"{random_name}.uniformScale", True)
+                # uniformRandom=True makes scaleX apply to all axes uniformly
+                cmds.setAttr(f"{random_name}.uniformRandom", True)
                 cmds.setAttr(f"{random_name}.scaleX", scale_variation)
 
                 # note: MASH Random adds/subtracts from base scale of 1.0
