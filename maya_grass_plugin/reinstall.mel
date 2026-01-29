@@ -1,0 +1,332 @@
+// reinstall.mel - drag into maya viewport for clean reinstall + hot-reload
+//
+// performs a full uninstall, reinstall, and hot-reload in one step.
+// no maya restart required.
+
+global proc string findMayapy() {
+    // locate the mayapy executable for the current platform
+
+    string $mayaLocation = `getenv "MAYA_LOCATION"`;
+
+    // try MAYA_LOCATION first (most reliable)
+    if ($mayaLocation != "") {
+        // macOS: MAYA_LOCATION is the .app bundle Contents dir
+        string $macPath = $mayaLocation + "/bin/mayapy";
+        if (`filetest -f $macPath`) return $macPath;
+
+        // windows
+        string $winPath = $mayaLocation + "/bin/mayapy.exe";
+        if (`filetest -f $winPath`) return $winPath;
+
+        // linux
+        string $linPath = $mayaLocation + "/bin/mayapy";
+        if (`filetest -f $linPath`) return $linPath;
+    }
+
+    // fallback: try common paths per platform
+    string $os = `about -operatingSystem`;
+
+    if (`gmatch $os "mac*"` || `gmatch $os "Mac*"`) {
+        string $mayaVersion = `about -version`;
+        string $year = `match "[0-9][0-9][0-9][0-9]" $mayaVersion`;
+        string $paths[] = {
+            "/Applications/Autodesk/maya" + $year + "/Maya.app/Contents/bin/mayapy",
+            "/Applications/Autodesk/maya2026/Maya.app/Contents/bin/mayapy",
+            "/Applications/Autodesk/maya2025/Maya.app/Contents/bin/mayapy",
+            "/Applications/Autodesk/maya2024/Maya.app/Contents/bin/mayapy"
+        };
+        for ($p in $paths) {
+            if (`filetest -f $p`) return $p;
+        }
+    } else if (`gmatch $os "win*"` || `gmatch $os "Win*"`) {
+        string $mayaVersion = `about -version`;
+        string $year = `match "[0-9][0-9][0-9][0-9]" $mayaVersion`;
+        string $paths[] = {
+            "C:/Program Files/Autodesk/Maya" + $year + "/bin/mayapy.exe",
+            "C:/Program Files/Autodesk/Maya2026/bin/mayapy.exe",
+            "C:/Program Files/Autodesk/Maya2025/bin/mayapy.exe",
+            "C:/Program Files/Autodesk/Maya2024/bin/mayapy.exe"
+        };
+        for ($p in $paths) {
+            if (`filetest -f $p`) return $p;
+        }
+    } else {
+        string $mayaVersion = `about -version`;
+        string $year = `match "[0-9][0-9][0-9][0-9]" $mayaVersion`;
+        string $paths[] = {
+            "/usr/autodesk/maya" + $year + "/bin/mayapy",
+            "/usr/autodesk/maya2026/bin/mayapy",
+            "/usr/autodesk/maya2025/bin/mayapy",
+            "/usr/autodesk/maya2024/bin/mayapy"
+        };
+        for ($p in $paths) {
+            if (`filetest -f $p`) return $p;
+        }
+    }
+
+    return "";
+}
+
+
+global proc int installNumpy() {
+    // try to install numpy using mayapy
+    // returns 1 on success, 0 on failure
+
+    string $mayapy = findMayapy();
+    if ($mayapy == "") {
+        warning "Could not locate mayapy. numpy must be installed manually.";
+        return 0;
+    }
+
+    print ("Found mayapy at: " + $mayapy + "\n");
+    print "Running: mayapy -m pip install --user numpy\n";
+    print "This may take a moment...\n";
+
+    // run pip install
+    string $cmd = "\"" + $mayapy + "\" -m pip install --user numpy";
+    int $result = `system($cmd)`;
+
+    // verify numpy is importable
+    string $verifyCmd = "\"" + $mayapy + "\" -c \"import numpy; print(numpy.__version__)\"";
+    string $version = `system($verifyCmd)`;
+
+    if ($version != "") {
+        print ("numpy " + $version + " installed successfully.\n");
+        return 1;
+    } else {
+        warning "numpy installation could not be verified.";
+        return 0;
+    }
+}
+
+
+global proc reinstallClean(string $modPath) {
+    // phase 1: clean existing installation state
+
+    print "\n--- phase 1: clean ---\n";
+
+    // delete .mod file
+    if (`filetest -f $modPath`) {
+        sysFile -delete $modPath;
+        print ("[reinstall] removed module file: " + $modPath + "\n");
+    } else {
+        print ("[reinstall] module file not found (already clean): " + $modPath + "\n");
+    }
+
+    // remove shelf button
+    int $removed = 0;
+    if (`shelfLayout -exists "Custom"`) {
+        string $buttons[] = `shelfLayout -query -childArray "Custom"`;
+        for ($btn in $buttons) {
+            if (`shelfButton -exists $btn`) {
+                string $ann = `shelfButton -query -annotation $btn`;
+                if ($ann == "Open Grass Generator UI") {
+                    deleteUI $btn;
+                    $removed = 1;
+                    print "[reinstall] removed shelf button\n";
+                }
+            }
+        }
+    }
+    if ($removed) {
+        global string $gShelfTopLevel;
+        if ($gShelfTopLevel != "") {
+            saveAllShelves $gShelfTopLevel;
+        }
+    } else {
+        print "[reinstall] shelf button not found (already clean)\n";
+    }
+
+    // wipe all grassUI_* optionVars
+    string $prefPrefix = "grassUI_";
+    string $prefKeys[] = {
+        "terrain", "grass", "count", "wind",
+        "scale_min_w1", "scale_max_w1", "scale_min_w2", "scale_max_w2",
+        "proximity", "seed", "noise", "time",
+        "octaves", "persistence", "max_lean",
+        "min_distance", "cluster_falloff", "edge_offset",
+        "gravity_weight"
+    };
+
+    int $prefCount = 0;
+    for ($key in $prefKeys) {
+        string $fullKey = $prefPrefix + $key;
+        if (`optionVar -exists $fullKey`) {
+            optionVar -remove $fullKey;
+            $prefCount++;
+        }
+    }
+    print ("[reinstall] removed " + $prefCount + " saved preferences\n");
+
+    // purge maya_grass_gen and opensimplex from sys.modules
+    python("import sys; _purged = [sys.modules.pop(k) for k in list(sys.modules.keys()) if 'maya_grass_gen' in k or 'opensimplex' in k]; print(f'[reinstall] purged {len(_purged)} cached python modules')");
+}
+
+
+global proc reinstallInstall(string $modulePath, string $modFile) {
+    // phase 2: fresh install
+
+    print "\n--- phase 2: install ---\n";
+
+    // create modules dir if needed
+    string $modulesDir = dirname($modFile) + "/";
+    if (!`filetest -d $modulesDir`) {
+        sysFile -makeDir $modulesDir;
+        print ("[reinstall] created modules directory: " + $modulesDir + "\n");
+    }
+
+    // write fresh .mod file
+    int $fileId = `fopen $modFile "w"`;
+    fprint $fileId ("+ MAYAVERSION:2022 maya_grass_plugin 1.0 " + $modulePath + "\n");
+    fprint $fileId ("+ MAYAVERSION:2023 maya_grass_plugin 1.0 " + $modulePath + "\n");
+    fprint $fileId ("+ MAYAVERSION:2024 maya_grass_plugin 1.0 " + $modulePath + "\n");
+    fprint $fileId ("+ MAYAVERSION:2025 maya_grass_plugin 1.0 " + $modulePath + "\n");
+    fprint $fileId ("+ MAYAVERSION:2026 maya_grass_plugin 1.0 " + $modulePath + "\n");
+    fprint $fileId "icons: icons\n";
+    fprint $fileId "scripts: scripts\n";
+    fprint $fileId "PYTHONPATH +:= scripts\n";
+    fprint $fileId "PYTHONPATH +:= vendor\n";
+    fclose $fileId;
+    print ("[reinstall] wrote module file: " + $modFile + "\n");
+
+    // install numpy
+    print "[reinstall] checking numpy dependency...\n";
+    int $numpyInstalled = installNumpy();
+    if ($numpyInstalled) {
+        print "[reinstall] numpy: OK\n";
+    } else {
+        print "[reinstall] numpy: FAILED - run manually: mayapy -m pip install --user numpy\n";
+    }
+
+    // add shelf button to Custom shelf
+    global string $gShelfTopLevel;
+    string $shelves[] = `tabLayout -q -childArray $gShelfTopLevel`;
+    string $shelfName = "Custom";
+
+    // create Custom shelf if needed
+    int $shelfExists = 0;
+    for ($shelf in $shelves) {
+        if ($shelf == $shelfName) {
+            $shelfExists = 1;
+            break;
+        }
+    }
+    if (!$shelfExists) {
+        shelfLayout -parent $gShelfTopLevel $shelfName;
+    }
+
+    // check if button already exists (shouldn't after clean, but be safe)
+    string $shelfButtons[] = `shelfLayout -q -childArray $shelfName`;
+    int $buttonExists = 0;
+    for ($btn in $shelfButtons) {
+        if (`shelfButton -exists $btn`) {
+            string $ann = `shelfButton -q -annotation $btn`;
+            if ($ann == "Open Grass Generator UI") {
+                $buttonExists = 1;
+                break;
+            }
+        }
+    }
+
+    if (!$buttonExists) {
+        shelfButton
+            -parent $shelfName
+            -annotation "Open Grass Generator UI"
+            -image1 "commandButton.png"
+            -command "from maya_grass_gen import show_grass_ui; show_grass_ui()"
+            -sourceType "python";
+        print "[reinstall] shelf button added to 'Custom' shelf\n";
+    }
+
+    // persist shelf
+    if ($gShelfTopLevel != "") {
+        saveAllShelves $gShelfTopLevel;
+    }
+}
+
+
+global proc reinstallHotReload(string $modulePath) {
+    // phase 3: hot-reload python paths so imports work without restart
+
+    print "\n--- phase 3: hot-reload ---\n";
+
+    // .mod file PYTHONPATH directives only take effect at maya startup.
+    // inject the paths into the live sys.path so imports work now.
+    string $scriptsPath = $modulePath + "/scripts";
+    string $vendorPath = $modulePath + "/vendor";
+
+    // insert at front of sys.path (highest priority), remove duplicates first
+    python("import sys; p = '" + $scriptsPath + "'; sys.path = [x for x in sys.path if x != p]; sys.path.insert(0, p)");
+    python("import sys; p = '" + $vendorPath + "'; sys.path = [x for x in sys.path if x != p]; sys.path.insert(0, p)");
+    print ("[reinstall] injected into sys.path: " + $scriptsPath + "\n");
+    print ("[reinstall] injected into sys.path: " + $vendorPath + "\n");
+
+    // verify the import works
+    int $importOk = 0;
+    string $modLocation = "";
+    $importOk = `python("try:\n    from maya_grass_gen import show_grass_ui\n    print(1)\nexcept Exception as e:\n    print(0)")`;
+
+    if ($importOk) {
+        $modLocation = `python("import maya_grass_gen; print(maya_grass_gen.__file__)")`;
+        print ("[reinstall] import verified: " + $modLocation + "\n");
+    } else {
+        warning "[reinstall] import failed - check script editor for errors";
+    }
+}
+
+
+global proc reinstall() {
+    // orchestrator: locate self, derive paths, run all three phases
+
+    // get this script's location via whatIs
+    string $scriptLocation = `whatIs "reinstall"`;
+    string $scriptPath = "";
+    if (`gmatch $scriptLocation "*found in:*"`) {
+        $scriptPath = `substitute ".*found in: " $scriptLocation ""`;
+    }
+
+    // fallback: prompt user
+    if ($scriptPath == "" || !`filetest -f $scriptPath`) {
+        string $result = `fileDialog -mode 0 -title "Select reinstall.mel location"`;
+        if ($result != "") {
+            $scriptPath = $result;
+        } else {
+            error "Could not determine reinstall.mel location. Reinstall cancelled.";
+            return;
+        }
+    }
+
+    // derive module path (parent directory of this script)
+    string $modulePath = dirname($scriptPath);
+
+    // derive .mod file path
+    string $userAppDir = `internalVar -userAppDir`;
+    string $modulesDir = $userAppDir + "modules/";
+    string $modFile = $modulesDir + "maya_grass_plugin.mod";
+
+    print "\n===========================================\n";
+    print "Maya Grass Plugin - reinstall\n";
+    print "===========================================\n";
+
+    // phase 1: clean
+    reinstallClean($modFile);
+
+    // phase 2: install
+    reinstallInstall($modulePath, $modFile);
+
+    // phase 3: hot-reload
+    reinstallHotReload($modulePath);
+
+    // done
+    print "\n===========================================\n";
+    print "Reinstall complete! No restart needed.\n";
+    print ("Module path: " + $modulePath + "\n");
+    print ("Mod file: " + $modFile + "\n");
+    print "\n";
+    print "Click the shelf button or run:\n";
+    print "    from maya_grass_gen import show_grass_ui\n";
+    print "    show_grass_ui()\n";
+    print "===========================================\n";
+}
+
+reinstall();
