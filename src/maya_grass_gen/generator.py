@@ -970,12 +970,18 @@ for i in range(count):
     lean_amount = min({self._max_lean_angle}, magnitude * 10)
 
     # combine terrain tilt + wind lean
-    # terrain tilt is the static slope-aware base orientation
-    # wind lean is added on top for animation
+    # terrain tilt is decomposed into x/z euler components so the blade
+    # tilts in the correct direction on slopes instead of just adding to rx
+    # which would push it into the terrain on the downhill side
     tilt_angle, tilt_dir = terrain_tilts[i]
-    rx = tilt_angle + lean_amount
-    ry = tilt_dir + base_rotations[i] + math.degrees(wind_angle) * 0.3
-    md.outRotation[i] = (rx, ry, 0)
+    tilt_dir_rad = math.radians(tilt_dir)
+    tilt_rx = tilt_angle * math.cos(tilt_dir_rad)
+    tilt_rz = tilt_angle * math.sin(tilt_dir_rad)
+
+    rx = tilt_rx + lean_amount
+    ry = base_rotations[i] + math.degrees(wind_angle) * 0.3
+    rz = tilt_rz
+    md.outRotation[i] = (rx, ry, rz)
 
 md.setData()
 '''
@@ -1121,10 +1127,17 @@ for i in range(count):
     lean_amount = min(max_lean, 15 + 10 * abs(math.sin(angle)))
 
     # combine terrain tilt + wind lean
+    # decompose tilt into x/z euler components so blade tilts along slope
+    # direction rather than pivoting into the terrain
     tilt_angle, tilt_dir = terrain_tilts[i]
-    rx = tilt_angle + lean_amount
-    ry = tilt_dir + math.degrees(angle)
-    md.outRotation[i] = (rx, ry, 0)
+    tilt_dir_rad = math.radians(tilt_dir)
+    tilt_rx = tilt_angle * math.cos(tilt_dir_rad)
+    tilt_rz = tilt_angle * math.sin(tilt_dir_rad)
+
+    rx = tilt_rx + lean_amount
+    ry = math.degrees(angle)
+    rz = tilt_rz
+    md.outRotation[i] = (rx, ry, rz)
 
 md.setData()
 '''
