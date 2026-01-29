@@ -159,7 +159,7 @@ global proc reinstallClean(string $modPath) {
     print ("[reinstall] removed " + $prefCount + " saved preferences\n");
 
     // purge maya_grass_gen and opensimplex from sys.modules
-    python("import sys; _purged = [sys.modules.pop(k) for k in list(sys.modules.keys()) if 'maya_grass_gen' in k or 'opensimplex' in k]; print(f'[reinstall] purged {len(_purged)} cached python modules')");
+    python("import sys; _purged = [sys.modules.pop(k, None) for k in list(sys.modules.keys()) if 'maya_grass_gen' in k or 'opensimplex' in k]; print('[reinstall] purged ' + str(len(_purged)) + ' cached python modules')");
 }
 
 
@@ -250,6 +250,9 @@ global proc reinstallHotReload(string $modulePath) {
 
     print "\n--- phase 3: hot-reload ---\n";
 
+    // defensive: purge cached modules again in case clean phase was skipped
+    python("import sys; [sys.modules.pop(k, None) for k in list(sys.modules.keys()) if 'maya_grass_gen' in k or 'opensimplex' in k]");
+
     // .mod file PYTHONPATH directives only take effect at maya startup.
     // inject the paths into the live sys.path so imports work now.
     string $scriptsPath = $modulePath + "/scripts";
@@ -262,16 +265,7 @@ global proc reinstallHotReload(string $modulePath) {
     print ("[reinstall] injected into sys.path: " + $vendorPath + "\n");
 
     // verify the import works
-    int $importOk = 0;
-    string $modLocation = "";
-    $importOk = `python("try:\n    from maya_grass_gen import show_grass_ui\n    print(1)\nexcept Exception as e:\n    print(0)")`;
-
-    if ($importOk) {
-        $modLocation = `python("import maya_grass_gen; print(maya_grass_gen.__file__)")`;
-        print ("[reinstall] import verified: " + $modLocation + "\n");
-    } else {
-        warning "[reinstall] import failed - check script editor for errors";
-    }
+    python("try:\n    from maya_grass_gen import show_grass_ui\n    import maya_grass_gen\n    print('[reinstall] import verified: ' + maya_grass_gen.__file__)\nexcept Exception as e:\n    print('[reinstall] import FAILED: ' + str(e))");
 }
 
 
@@ -308,14 +302,20 @@ global proc reinstall() {
     print "Maya Grass Plugin - reinstall\n";
     print "===========================================\n";
 
+    // wrap each phase in catch so all phases execute even if one errors
+    int $err;
+
     // phase 1: clean
-    reinstallClean($modFile);
+    $err = catch(reinstallClean($modFile));
+    if ($err) warning "[reinstall] clean phase had errors (continuing anyway)";
 
     // phase 2: install
-    reinstallInstall($modulePath, $modFile);
+    $err = catch(reinstallInstall($modulePath, $modFile));
+    if ($err) warning "[reinstall] install phase had errors (continuing anyway)";
 
     // phase 3: hot-reload
-    reinstallHotReload($modulePath);
+    $err = catch(reinstallHotReload($modulePath));
+    if ($err) warning "[reinstall] hot-reload phase had errors";
 
     // done
     print "\n===========================================\n";
