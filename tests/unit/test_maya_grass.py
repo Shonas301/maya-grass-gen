@@ -1025,3 +1025,59 @@ class TestTerrainTilt:
         code = gen._generate_point_based_wind_code()
         assert "terrain_tilts" in code
         assert "tilt_angle, tilt_dir = terrain_tilts[i]" in code
+
+    def test_tilt_decomposed_into_xz_euler(self) -> None:
+        """test that terrain tilt is decomposed into x/z euler components.
+
+        the tilt should be split via cos/sin of the direction so the blade
+        leans along the slope rather than just adding to rx which would
+        push it into the terrain on one side.
+        """
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=10, seed=42)
+        gen._terrain_tilts = [(10.0, 90.0)] * 10
+        code = gen._generate_wind_python_code()
+        assert "tilt_rx = tilt_angle * math.cos(tilt_dir_rad)" in code
+        assert "tilt_rz = tilt_angle * math.sin(tilt_dir_rad)" in code
+        assert "rx = tilt_rx + lean_amount" in code
+        assert "rz = tilt_rz" in code
+        # should NOT have the old buggy pattern of adding tilt_dir to ry
+        assert "ry = tilt_dir +" not in code
+
+    def test_point_based_tilt_decomposed_into_xz_euler(self) -> None:
+        """test that point-based code also uses x/z euler decomposition."""
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=10, seed=42)
+        gen._terrain_tilts = [(10.0, 90.0)] * 10
+        code = gen._generate_point_based_wind_code()
+        assert "tilt_rx = tilt_angle * math.cos(tilt_dir_rad)" in code
+        assert "tilt_rz = tilt_angle * math.sin(tilt_dir_rad)" in code
+
+    def test_tilt_decomposition_math_pure_x_slope(self) -> None:
+        """test that a slope in the +x direction (dir=0) puts all tilt in rx.
+
+        when the slope faces +x (tilt_dir=0), cos(0)=1 and sin(0)=0,
+        so all tilt goes to rx and rz stays zero. this means the blade
+        leans in the x direction as expected.
+        """
+        tilt_angle = 10.0
+        tilt_dir = 0.0  # +x direction
+        tilt_dir_rad = math.radians(tilt_dir)
+        tilt_rx = tilt_angle * math.cos(tilt_dir_rad)
+        tilt_rz = tilt_angle * math.sin(tilt_dir_rad)
+        assert abs(tilt_rx - 10.0) < 0.01
+        assert abs(tilt_rz) < 0.01
+
+    def test_tilt_decomposition_math_pure_z_slope(self) -> None:
+        """test that a slope in the +z direction (dir=90) puts all tilt in rz.
+
+        when the slope faces +z (tilt_dir=90), cos(90)=0 and sin(90)=1,
+        so all tilt goes to rz and rx stays zero.
+        """
+        tilt_angle = 10.0
+        tilt_dir = 90.0  # +z direction
+        tilt_dir_rad = math.radians(tilt_dir)
+        tilt_rx = tilt_angle * math.cos(tilt_dir_rad)
+        tilt_rz = tilt_angle * math.sin(tilt_dir_rad)
+        assert abs(tilt_rx) < 0.01
+        assert abs(tilt_rz - 10.0) < 0.01
