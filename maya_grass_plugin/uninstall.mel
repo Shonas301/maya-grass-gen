@@ -1,0 +1,86 @@
+// uninstall.mel - drag into maya viewport to remove maya grass generator plugin
+//
+// removes:
+//   1. .mod file from ~/maya/modules/
+//   2. shelf button from Custom shelf
+//   3. optionVar preferences (grassUI_*)
+//
+// does NOT remove:
+//   - numpy (other plugins may use it)
+//   - the plugin source files themselves
+
+global proc uninstall() {
+    print("\n=== maya grass generator - uninstall ===\n");
+
+    // --- 1. remove .mod file ---
+    string $modFileName = "maya_grass_plugin.mod";
+    string $userAppDir = `internalVar -userAppDir`;
+    string $modulesDir = $userAppDir + "modules/";
+    string $modPath = $modulesDir + $modFileName;
+
+    if (`filetest -f $modPath`) {
+        sysFile -delete $modPath;
+        print("[uninstall] removed module file: " + $modPath + "\n");
+    } else {
+        print("[uninstall] module file not found (already removed): " + $modPath + "\n");
+    }
+
+    // --- 2. remove shelf button ---
+    int $removed = 0;
+    if (`shelfLayout -exists "Custom"`) {
+        string $buttons[] = `shelfLayout -query -childArray "Custom"`;
+        for ($btn in $buttons) {
+            if (`shelfButton -exists $btn`) {
+                string $ann = `shelfButton -query -annotation $btn`;
+                if ($ann == "Open Grass Generator UI") {
+                    deleteUI $btn;
+                    $removed = 1;
+                    print("[uninstall] removed shelf button\n");
+                }
+            }
+        }
+    }
+    if ($removed) {
+        // persist shelf change so button doesn't reappear on restart
+        global string $gShelfTopLevel;
+        if ($gShelfTopLevel != "") {
+            saveAllShelves $gShelfTopLevel;
+        }
+    } else {
+        print("[uninstall] shelf button not found (already removed)\n");
+    }
+
+    // --- 3. remove optionVar preferences ---
+    string $prefPrefix = "grassUI_";
+    string $prefKeys[] = {
+        "terrain", "grass", "count", "wind",
+        "scale_min_w1", "scale_max_w1", "scale_min_w2", "scale_max_w2",
+        "proximity", "seed", "noise", "time",
+        "octaves", "persistence", "max_lean",
+        "min_distance", "cluster_falloff", "edge_offset",
+        "gravity_weight"
+    };
+
+    int $prefCount = 0;
+    for ($key in $prefKeys) {
+        string $fullKey = $prefPrefix + $key;
+        if (`optionVar -exists $fullKey`) {
+            optionVar -remove $fullKey;
+            $prefCount++;
+        }
+    }
+    print("[uninstall] removed " + $prefCount + " saved preferences\n");
+
+    // --- done ---
+    print("\n=== uninstall complete ===\n");
+    print("restart maya for changes to take full effect.\n");
+    print("the plugin source files have not been deleted.\n\n");
+
+    confirmDialog
+        -title "Uninstall Complete"
+        -message "Maya Grass Generator has been uninstalled.\n\nRestart Maya for changes to take full effect."
+        -button "OK"
+        -defaultButton "OK";
+}
+
+uninstall();
