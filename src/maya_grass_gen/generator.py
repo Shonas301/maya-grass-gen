@@ -237,14 +237,13 @@ class GrassGenerator:
         self._gravity_weight = max(0.0, min(1.0, weight))
 
     def _compute_terrain_tilts(self, terrain_mesh: str) -> None:
-        """Query terrain normals and compute per-point tilt angles.
+        """Query terrain surface and compute per-point height + tilt angles.
 
-        uses maya's MFnMesh to get the surface normal at each grass point
-        position, then blends with world-up using gravity_weight to get
-        the effective growth direction. decomposes into tilt_angle (from
-        vertical) and tilt_direction (azimuth on XZ plane).
+        uses maya's MFnMesh.getClosestPointAndNormal() to:
+        1. snap each grass point's Y to the actual mesh surface height
+        2. compute gravity-blended tilt orientation from the surface normal
 
-        math:
+        math (tilt):
             D = (1 - g) * N + g * U    where N = surface normal, U = (0,1,0)
             D_hat = D / |D|
             tilt_angle = acos(D_hat.y)
@@ -254,12 +253,7 @@ class GrassGenerator:
             terrain_mesh: name of the terrain mesh to query normals from
         """
         if not MAYA_AVAILABLE:
-            # no maya, no normals -- all tilts stay at zero
-            self._terrain_tilts = [(0.0, 0.0)] * len(self._grass_points)
-            return
-
-        if self._gravity_weight >= 1.0:
-            # pure world-up, no terrain influence needed
+            # no maya, no surface queries -- tilts stay at zero, heights unchanged
             self._terrain_tilts = [(0.0, 0.0)] * len(self._grass_points)
             return
 
@@ -273,21 +267,31 @@ class GrassGenerator:
             mesh_fn = om2.MFnMesh(dag_path)
         except Exception:
             # maya API not functional (mocked or unavailable)
-            print(f"[terrain tilt] maya API unavailable, using zero tilts")
+            print(f"[terrain] maya API unavailable, using zero tilts")
             self._terrain_tilts = [(0.0, 0.0)] * len(self._grass_points)
             return
 
         g = self._gravity_weight
         world_up = om2.MVector(0, 1, 0)
+        skip_tilt = g >= 1.0
 
         tilts = []
+        height_snapped = 0
         for point in self._grass_points:
             try:
                 # find closest point on mesh and get its normal
                 query_point = om2.MPoint(point.x, point.y, point.z)
-                _closest, normal = mesh_fn.getClosestPointAndNormal(
+                closest, normal = mesh_fn.getClosestPointAndNormal(
                     query_point, om2.MSpace.kWorld,
                 )
+
+                # snap grass point Y to actual mesh surface height
+                point.y = closest.y
+                height_snapped += 1
+
+                if skip_tilt:
+                    tilts.append((0.0, 0.0))
+                    continue
 
                 # blend normal with world-up: D = (1-g)*N + g*U
                 normal_vec = om2.MVector(normal)
@@ -309,14 +313,23 @@ class GrassGenerator:
                 tilts.append((0.0, 0.0))
 
         self._terrain_tilts = tilts
-        print(f"[terrain tilt] computed {len(tilts)} normals "
-              f"(gravity_weight={g:.2f})")
 
-        if tilts:
-            angles = [t[0] for t in tilts]
-            print(f"[terrain tilt] angle range: "
-                  f"min={min(angles):.1f}deg, max={max(angles):.1f}deg, "
-                  f"mean={sum(angles)/len(angles):.1f}deg")
+        # height diagnostics
+        if self._grass_points:
+            heights = [p.y for p in self._grass_points]
+            print(f"[terrain height] snapped {height_snapped}/{len(self._grass_points)} "
+                  f"points to mesh surface")
+            print(f"[terrain height] Y range: min={min(heights):.3f}, "
+                  f"max={max(heights):.3f}, mean={sum(heights)/len(heights):.3f}")
+
+        if not skip_tilt:
+            print(f"[terrain tilt] computed {len(tilts)} normals "
+                  f"(gravity_weight={g:.2f})")
+            if tilts:
+                angles = [t[0] for t in tilts]
+                print(f"[terrain tilt] angle range: "
+                      f"min={min(angles):.1f}deg, max={max(angles):.1f}deg, "
+                      f"mean={sum(angles)/len(angles):.1f}deg")
 
     def load_bump_map(self, image_path: str) -> None:
         """Load bump/displacement map for obstacle detection.
@@ -652,7 +665,7 @@ class GrassGenerator:
 
         print(f"creating MASH network '{network_name}'")
 
-        # compute terrain normals for slope-aware grass orientation
+        # snap grass heights to mesh surface and compute slope-aware orientation
         target_mesh = terrain_mesh or self.terrain.mesh_name
         if target_mesh:
             self._compute_terrain_tilts(target_mesh)

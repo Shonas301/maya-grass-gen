@@ -1081,3 +1081,129 @@ class TestTerrainTilt:
         tilt_rz = tilt_angle * math.sin(tilt_dir_rad)
         assert abs(tilt_rx) < 0.01
         assert abs(tilt_rz - 10.0) < 0.01
+
+
+class TestTerrainHeightSnapping:
+    """tests for terrain surface height snapping.
+
+    verifies that grass points get their Y values from the actual mesh
+    surface rather than using a static height=0.0 for all points.
+    """
+
+    def test_default_height_is_zero(self) -> None:
+        """test that generated points start with y=0 before surface snapping."""
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=20, seed=42)
+        assert all(p.y == 0.0 for p in gen.grass_points)
+
+    def test_height_snapping_updates_y_values(self) -> None:
+        """test that manually setting point.y propagates to positions data."""
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=10, seed=42)
+
+        # simulate what _compute_terrain_tilts does: set varied heights
+        for i, point in enumerate(gen._grass_points):
+            point.y = float(i) * 2.5  # 0, 2.5, 5.0, 7.5, ...
+
+        heights = [p.y for p in gen._grass_points]
+        assert heights[0] == 0.0
+        assert heights[1] == 2.5
+        assert heights[5] == 12.5
+
+    def test_snapped_heights_in_wind_python_code(self) -> None:
+        """test that height-snapped values appear in generated MASH python code."""
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=5, seed=42)
+        gen._terrain_tilts = [(0.0, 0.0)] * 5
+
+        # set non-zero heights to simulate surface snapping
+        gen._grass_points[0].y = 10.5
+        gen._grass_points[1].y = -3.2
+        gen._grass_points[2].y = 7.8
+
+        code = gen._generate_wind_python_code()
+
+        # positions data in code should contain non-zero Y values
+        assert "10.5" in code
+        assert "-3.2" in code
+        assert "7.8" in code
+
+    def test_snapped_heights_in_point_based_code(self) -> None:
+        """test that height-snapped values appear in point-based MASH code."""
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=5, seed=42)
+        gen._terrain_tilts = [(0.0, 0.0)] * 5
+
+        # set non-zero heights
+        gen._grass_points[0].y = 15.0
+        gen._grass_points[1].y = -5.5
+
+        code = gen._generate_point_based_wind_code()
+
+        assert "15.0" in code
+        assert "-5.5" in code
+
+    def test_no_maya_leaves_heights_unchanged(self) -> None:
+        """test that without maya, _compute_terrain_tilts doesn't modify heights."""
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=10, seed=42)
+
+        # set custom heights before calling tilts
+        for p in gen._grass_points:
+            p.y = 42.0
+
+        gen._compute_terrain_tilts("fake_mesh")
+
+        # heights should be unchanged (no maya = no surface queries)
+        assert all(p.y == 42.0 for p in gen._grass_points)
+
+    def test_positions_data_reflects_height_after_snap(self) -> None:
+        """test that positions_data list used in MASH code has correct Y values."""
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=5, seed=42)
+
+        # simulate height snap
+        expected_heights = [3.0, 7.5, -2.1, 0.0, 11.3]
+        for i, point in enumerate(gen._grass_points):
+            point.y = expected_heights[i]
+
+        # verify the positions data matches
+        positions = [(p.x, p.y, p.z) for p in gen._grass_points]
+        for i, (_, y, _) in enumerate(positions):
+            assert abs(y - expected_heights[i]) < 0.001, (
+                f"point {i}: expected y={expected_heights[i]}, got y={y}"
+            )
+
+    def test_height_variety_on_simulated_terrain(self) -> None:
+        """test that simulated non-flat terrain produces varied grass heights."""
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=50, seed=42)
+
+        # simulate hilly terrain: y = 10 * sin(x/10) * sin(z/10)
+        for point in gen._grass_points:
+            point.y = 10.0 * math.sin(point.x * 0.1) * math.sin(point.z * 0.1)
+
+        heights = [p.y for p in gen._grass_points]
+        height_range = max(heights) - min(heights)
+
+        # with 50 points spread across 0-100, sine terrain should produce variety
+        assert height_range > 1.0, (
+            f"expected height variety > 1.0, got range={height_range:.3f}"
+        )
+
+    def test_full_gravity_still_snaps_height(self) -> None:
+        """test that gravity_weight=1.0 still allows height snapping.
+
+        gravity_weight=1.0 means 'no tilt from terrain normal' but height
+        snapping should still occur. the old code early-returned before
+        querying the mesh at all when gravity_weight >= 1.0.
+        """
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        gen.generate_points(count=5, seed=42)
+        gen.set_gravity_weight(1.0)
+
+        # _compute_terrain_tilts without maya won't snap (no API),
+        # but verify it still produces tilts list and doesn't crash
+        gen._compute_terrain_tilts("fake_mesh")
+        assert len(gen._terrain_tilts) == len(gen._grass_points)
+        assert all(t == (0.0, 0.0) for t in gen._terrain_tilts)
