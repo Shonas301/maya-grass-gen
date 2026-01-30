@@ -239,9 +239,15 @@ class GrassGenerator:
     def _compute_terrain_tilts(self, terrain_mesh: str) -> None:
         """Query terrain surface and compute per-point height + tilt angles.
 
-        uses maya's MFnMesh.getClosestPointAndNormal() to:
-        1. snap each grass point's Y to the actual mesh surface height
-        2. compute gravity-blended tilt orientation from the surface normal
+        uses a downward ray-cast (MFnMesh.closestIntersection) to find the
+        mesh surface height at each grass point's XZ position, then snaps the
+        point's Y to the surface. also computes gravity-blended tilt
+        orientation from the surface normal.
+
+        ray-cast is necessary because getClosestPointAndNormal with a query
+        at y=0 returns the geometrically nearest mesh point, which on hilly
+        terrain may be at a completely different XZ position (on a lower,
+        closer part of the mesh) rather than the surface directly above.
 
         math (tilt):
             D = (1 - g) * N + g * U    where N = surface normal, U = (0,1,0)
@@ -275,19 +281,48 @@ class GrassGenerator:
         world_up = om2.MVector(0, 1, 0)
         skip_tilt = g >= 1.0
 
+        # ray origin height: well above the highest point on the terrain
+        ray_y = (self.terrain.bounds.max_y if self.terrain.bounds else 1000.0) + 100.0
+        ray_dir = om2.MFloatVector(0, -1, 0)
+
         tilts = []
         height_snapped = 0
+        raycast_hits = 0
+        fallback_used = 0
         for point in self._grass_points:
             try:
-                # find closest point on mesh and get its normal
-                query_point = om2.MPoint(point.x, point.y, point.z)
-                closest, normal = mesh_fn.getClosestPointAndNormal(
-                    query_point, om2.MSpace.kWorld,
+                # cast ray downward from above terrain to find surface at this XZ
+                ray_source = om2.MFloatPoint(point.x, ray_y, point.z)
+                hit_point, hit_param, hit_face, _hit_tri, _bary1, _bary2 = (
+                    mesh_fn.closestIntersection(
+                        ray_source, ray_dir,
+                        om2.MSpace.kWorld,
+                        ray_y + abs(self.terrain.bounds.min_y if self.terrain.bounds else 0) + 200.0,
+                        False,
+                    )
                 )
 
-                # snap grass point Y to actual mesh surface height
-                point.y = closest.y
-                height_snapped += 1
+                if hit_face != -1:
+                    # ray hit the mesh surface -- use hit point Y
+                    point.y = hit_point.y
+                    height_snapped += 1
+                    raycast_hits += 1
+
+                    if not skip_tilt:
+                        # get normal at the hit point for tilt calculation
+                        surface_pt = om2.MPoint(hit_point.x, hit_point.y, hit_point.z)
+                        _closest, normal = mesh_fn.getClosestPointAndNormal(
+                            surface_pt, om2.MSpace.kWorld,
+                        )
+                else:
+                    # ray missed (point outside mesh XZ extent) -- use closest
+                    query_point = om2.MPoint(point.x, point.y, point.z)
+                    closest, normal = mesh_fn.getClosestPointAndNormal(
+                        query_point, om2.MSpace.kWorld,
+                    )
+                    point.y = closest.y
+                    height_snapped += 1
+                    fallback_used += 1
 
                 if skip_tilt:
                     tilts.append((0.0, 0.0))
@@ -318,7 +353,8 @@ class GrassGenerator:
         if self._grass_points:
             heights = [p.y for p in self._grass_points]
             print(f"[terrain height] snapped {height_snapped}/{len(self._grass_points)} "
-                  f"points to mesh surface")
+                  f"points to mesh surface "
+                  f"(raycast={raycast_hits}, fallback={fallback_used})")
             print(f"[terrain height] Y range: min={min(heights):.3f}, "
                   f"max={max(heights):.3f}, mean={sum(heights)/len(heights):.3f}")
 

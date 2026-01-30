@@ -61,10 +61,11 @@ def diagnose_surface_height_sampling(
     mesh_name: str,
     num_samples: int = 20,
 ) -> dict:
-    """sample height at grid positions across the mesh surface.
+    """sample height at grid positions using both ray-cast and closest-point.
 
-    casts closest-point queries at evenly spaced XZ positions to show
-    what height values the mesh surface returns.
+    compares two approaches at evenly spaced XZ positions:
+    1. ray-cast: downward ray from above terrain (correct for hills)
+    2. closest-point: getClosestPointAndNormal from y=0 (fails on hills)
 
     args:
         mesh_name: terrain mesh name
@@ -86,57 +87,107 @@ def diagnose_surface_height_sampling(
     bbox = cmds.exactWorldBoundingBox(mesh_name)
     min_x, min_z = bbox[0], bbox[2]
     max_x, max_z = bbox[3], bbox[5]
+    max_y = bbox[4]
 
     step_x = (max_x - min_x) / max(num_samples - 1, 1)
     step_z = (max_z - min_z) / max(num_samples - 1, 1)
 
-    heights = []
+    # ray-cast setup
+    ray_y = max_y + 100.0
+    ray_dir = om2.MFloatVector(0, -1, 0)
+    max_dist = ray_y + abs(bbox[1]) + 200.0
+
+    raycast_heights = []
+    closest_heights = []
     samples = []
+    mismatches = 0
 
     for ix in range(num_samples):
         for iz in range(num_samples):
             x = min_x + ix * step_x
             z = min_z + iz * step_z
 
+            # method 1: ray-cast (correct approach)
+            ray_source = om2.MFloatPoint(x, ray_y, z)
+            hit_pt, _param, hit_face, _tri, _b1, _b2 = mesh_fn.closestIntersection(
+                ray_source, ray_dir, om2.MSpace.kWorld, max_dist, False,
+            )
+            raycast_y = hit_pt.y if hit_face != -1 else None
+
+            # method 2: closest point from y=0 (old approach)
             query = om2.MPoint(x, 0, z)
             closest, _normal = mesh_fn.getClosestPointAndNormal(
-                query, om2.MSpace.kWorld
+                query, om2.MSpace.kWorld,
             )
+            closest_y = closest.y
 
-            y = closest.y
-            heights.append(y)
-            samples.append({"x": x, "z": z, "surface_y": y})
+            # check for mismatch (indicates closest-point returned wrong surface)
+            mismatch = False
+            if raycast_y is not None and abs(raycast_y - closest_y) > 0.1:
+                mismatch = True
+                mismatches += 1
 
-    min_h = min(heights)
-    max_h = max(heights)
-    mean_h = sum(heights) / len(heights)
-    std_h = math.sqrt(sum((h - mean_h) ** 2 for h in heights) / len(heights))
+            if raycast_y is not None:
+                raycast_heights.append(raycast_y)
+            closest_heights.append(closest_y)
+
+            samples.append({
+                "x": x, "z": z,
+                "raycast_y": raycast_y,
+                "closest_y": closest_y,
+                "mismatch": mismatch,
+            })
+
+    rc_min = min(raycast_heights) if raycast_heights else 0
+    rc_max = max(raycast_heights) if raycast_heights else 0
+    rc_mean = sum(raycast_heights) / len(raycast_heights) if raycast_heights else 0
+    cl_min = min(closest_heights)
+    cl_max = max(closest_heights)
+    cl_mean = sum(closest_heights) / len(closest_heights)
 
     result = {
         "mesh": mesh_name,
-        "total_samples": len(heights),
-        "height_min": min_h,
-        "height_max": max_h,
-        "height_mean": mean_h,
-        "height_std": std_h,
-        "height_range": max_h - min_h,
-        "is_flat": (max_h - min_h) < 0.01,
-        "samples": samples[:10],  # first 10 for display
+        "total_samples": num_samples * num_samples,
+        "raycast": {"min": rc_min, "max": rc_max, "mean": rc_mean,
+                     "range": rc_max - rc_min, "hits": len(raycast_heights)},
+        "closest_point": {"min": cl_min, "max": cl_max, "mean": cl_mean,
+                          "range": cl_max - cl_min},
+        "mismatches": mismatches,
+        "mismatch_rate": mismatches / max(len(samples), 1),
+        "is_flat": (rc_max - rc_min) < 0.01 if raycast_heights else True,
+        "samples": samples[:20],
     }
 
-    print(f"\n=== surface height sampling: {mesh_name} ({len(heights)} samples) ===")
-    print(f"height range: [{min_h:.4f}, {max_h:.4f}]")
-    print(f"height span: {max_h - min_h:.4f}")
-    print(f"height mean: {mean_h:.4f}, std: {std_h:.4f}")
+    print(f"\n=== surface height sampling: {mesh_name} ({num_samples*num_samples} samples) ===")
+    print(f"\n  [ray-cast (correct)]")
+    print(f"    hits: {len(raycast_heights)}/{num_samples*num_samples}")
+    print(f"    height range: [{rc_min:.4f}, {rc_max:.4f}], span={rc_max-rc_min:.4f}")
+    print(f"    mean: {rc_mean:.4f}")
+    print(f"\n  [closest-point (old/fallback)]")
+    print(f"    height range: [{cl_min:.4f}, {cl_max:.4f}], span={cl_max-cl_min:.4f}")
+    print(f"    mean: {cl_mean:.4f}")
+    print(f"\n  [comparison]")
+    print(f"    mismatches (>0.1 unit difference): {mismatches}/{len(samples)} "
+          f"({result['mismatch_rate']:.1%})")
+
+    if mismatches > 0:
+        print(f"    WARNING: closest-point returned wrong height at {mismatches} positions!")
+        print(f"    these positions would have flat grass instead of following terrain")
+        mismatch_samples = [s for s in samples if s['mismatch']][:5]
+        for s in mismatch_samples:
+            print(f"      x={s['x']:.1f}, z={s['z']:.1f}: "
+                  f"raycast_y={s['raycast_y']:.3f}, closest_y={s['closest_y']:.3f}, "
+                  f"diff={abs(s['raycast_y'] - s['closest_y']):.3f}")
 
     if result['is_flat']:
-        print("WARNING: surface appears flat across all samples")
-    else:
-        print(f"surface has {max_h - min_h:.2f} units of elevation change")
+        print("\n  WARNING: surface appears flat across all samples")
 
-    print(f"\nsample grid (first 10):")
+    print(f"\n  sample grid (first 10):")
     for s in samples[:10]:
-        print(f"  x={s['x']:8.2f}, z={s['z']:8.2f} -> surface_y={s['surface_y']:.4f}")
+        rc = f"{s['raycast_y']:.4f}" if s['raycast_y'] is not None else "MISS"
+        flag = " MISMATCH" if s['mismatch'] else ""
+        print(f"    x={s['x']:8.2f}, z={s['z']:8.2f} -> "
+              f"raycast={rc}, closest={s['closest_y']:.4f}{flag}")
 
     return result
 
@@ -160,6 +211,7 @@ def diagnose_grass_point_heights(
         dict with per-point height diagnostics
     """
     import maya.api.OpenMaya as om2
+    from maya import cmds
     from maya_grass_gen.generator import GrassGenerator
     from maya_grass_gen.terrain import TerrainAnalyzer
 
@@ -176,18 +228,33 @@ def diagnose_grass_point_heights(
     # record post-snap heights
     post_snap = [p.y for p in gen._grass_points]
 
-    # verify against direct mesh query
+    # verify against direct ray-cast query
     sel = om2.MSelectionList()
     sel.add(terrain_mesh)
     dag_path = sel.getDagPath(0)
     mesh_fn = om2.MFnMesh(dag_path)
 
+    bbox = cmds.exactWorldBoundingBox(terrain_mesh)
+    ray_y = bbox[4] + 100.0
+    ray_dir = om2.MFloatVector(0, -1, 0)
+    max_dist = ray_y + abs(bbox[1]) + 200.0
+
     verification = []
     max_error = 0.0
     for i, point in enumerate(gen._grass_points):
-        query = om2.MPoint(point.x, 0, point.z)
-        closest, _ = mesh_fn.getClosestPointAndNormal(query, om2.MSpace.kWorld)
-        expected_y = closest.y
+        # use ray-cast for ground truth
+        ray_source = om2.MFloatPoint(point.x, ray_y, point.z)
+        hit_pt, _param, hit_face, _tri, _b1, _b2 = mesh_fn.closestIntersection(
+            ray_source, ray_dir, om2.MSpace.kWorld, max_dist, False,
+        )
+        if hit_face != -1:
+            expected_y = hit_pt.y
+        else:
+            # fallback for points outside mesh XZ
+            query = om2.MPoint(point.x, 0, point.z)
+            closest, _ = mesh_fn.getClosestPointAndNormal(query, om2.MSpace.kWorld)
+            expected_y = closest.y
+
         actual_y = point.y
         error = abs(actual_y - expected_y)
         max_error = max(max_error, error)
@@ -199,6 +266,7 @@ def diagnose_grass_point_heights(
             "post_snap_y": actual_y,
             "expected_y": expected_y,
             "error": error,
+            "method": "raycast" if hit_face != -1 else "closest_fallback",
         })
 
     # statistics
@@ -228,7 +296,7 @@ def diagnose_grass_point_heights(
           f"{result['post_snap_height_max']:.4f}]")
     print(f"post-snap height span: {result['post_snap_height_range']:.4f}")
     print(f"post-snap has height variety: {post_has_variety}")
-    print(f"max error vs direct surface query: {max_error:.6f}")
+    print(f"max error vs ray-cast ground truth: {max_error:.6f}")
     print(f"all heights match surface: {heights_match_surface}")
 
     if not post_has_variety:
@@ -236,14 +304,15 @@ def diagnose_grass_point_heights(
         print("  possible causes:")
         print("  - terrain mesh is flat")
         print("  - _compute_terrain_tilts not running height snap")
-        print("  - maya API returning incorrect closest points")
+        print("  - ray-cast not hitting mesh surface")
+        print("  - maya API returning incorrect results")
 
     print(f"\nsample points (first 10):")
-    print(f"  {'idx':>4} {'x':>8} {'z':>8} {'pre_y':>10} {'post_y':>10} {'expected':>10} {'error':>8}")
+    print(f"  {'idx':>4} {'x':>8} {'z':>8} {'pre_y':>10} {'post_y':>10} {'expected':>10} {'error':>8} {'method'}")
     for v in verification[:10]:
         print(f"  {v['index']:4d} {v['x']:8.2f} {v['z']:8.2f} "
               f"{v['pre_snap_y']:10.4f} {v['post_snap_y']:10.4f} "
-              f"{v['expected_y']:10.4f} {v['error']:8.6f}")
+              f"{v['expected_y']:10.4f} {v['error']:8.6f} {v['method']}")
 
     return result
 
