@@ -310,7 +310,7 @@ global proc reinstall() {
     if ($err) warning "[reinstall] clean phase had errors (continuing anyway)";
 
     // phase 2: install
-    $err = catch(reinstallInstall($modulePath, $modFile));
+    $err = catch(eval("reinstallInstall \"" + $modulePath + "\" \"" + $modFile + "\""));
     if ($err) warning "[reinstall] install phase had errors (continuing anyway)";
 
     // phase 3: hot-reload
