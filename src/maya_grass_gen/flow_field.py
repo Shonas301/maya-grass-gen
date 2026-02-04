@@ -13,6 +13,18 @@ import numpy as np
 
 from maya_grass_gen.noise_utils import fbm_noise3
 
+# optional scipy import for KD-tree spatial indexing
+try:
+    from scipy.spatial import KDTree
+    SCIPY_AVAILABLE = True
+except ImportError:
+    KDTree = None  # type: ignore[misc, assignment]
+    SCIPY_AVAILABLE = False
+
+# threshold for using KD-tree vs linear scan
+# tree construction is O(n log n), only worthwhile for larger obstacle counts
+KDTREE_THRESHOLD = 10
+
 # epsilon for floating point comparisons (distance from exact center)
 DISTANCE_EPSILON = 0.001
 
@@ -282,6 +294,8 @@ class PointClusterer:
         self.obstacles = obstacles or []
         self.rng = np.random.default_rng(seed)
         self.verbose = verbose
+        # cached obstacle arrays for vectorized operations (built lazily)
+        self._obs_cache: dict | None = None
 
     def add_obstacle(self, obstacle: Obstacle) -> None:
         """Add an obstacle to cluster around.
@@ -290,6 +304,105 @@ class PointClusterer:
             obstacle: the obstacle to add
         """
         self.obstacles.append(obstacle)
+        # invalidate cache when obstacles change
+        self._obs_cache = None
+
+    def _build_obstacle_cache(self) -> dict:
+        """Build cached obstacle arrays for vectorized operations.
+
+        includes KD-tree for O(log n) spatial queries when obstacle count
+        exceeds threshold and scipy is available.
+
+        Returns:
+            dict with precomputed obstacle arrays and optional KD-tree
+        """
+        if self._obs_cache is not None:
+            return self._obs_cache
+
+        if not self.obstacles:
+            self._obs_cache = {
+                "centers": np.empty((0, 2)),
+                "radii": np.empty(0),
+                "inner_radii_sq": np.empty(0),
+                "influence_radii_sq": np.empty(0),
+                "kdtree": None,
+                "max_influence_radius": 0.0,
+            }
+            return self._obs_cache
+
+        # build arrays for vectorized distance calculations
+        centers = np.array([[o.x, o.y] for o in self.obstacles])
+        radii = np.array([o.radius for o in self.obstacles])
+        inner_radii = radii * 0.85
+        influence_radii = np.array([o.influence_radius for o in self.obstacles])
+        max_influence = float(np.max(influence_radii))
+
+        # build KD-tree for large obstacle counts
+        kdtree = None
+        if SCIPY_AVAILABLE and len(self.obstacles) > KDTREE_THRESHOLD:
+            kdtree = KDTree(centers)
+            if self.verbose:
+                print(f"[perf] built KD-tree for {len(self.obstacles)} obstacles")
+
+        self._obs_cache = {
+            "centers": centers,
+            "radii": radii,
+            "inner_radii": inner_radii,
+            "inner_radii_sq": inner_radii * inner_radii,
+            "influence_radii": influence_radii,
+            "influence_radii_sq": influence_radii * influence_radii,
+            "kdtree": kdtree,
+            "max_influence_radius": max_influence,
+        }
+        return self._obs_cache
+
+    def _check_obstacles_vectorized(self, points: np.ndarray) -> np.ndarray:
+        """Check which points are inside any obstacle (vectorized).
+
+        Args:
+            points: shape (n, 2) array of (x, y) coordinates
+
+        Returns:
+            boolean array of shape (n,), True if point is INSIDE an obstacle
+        """
+        cache = self._build_obstacle_cache()
+        if cache["centers"].shape[0] == 0:
+            return np.zeros(len(points), dtype=bool)
+
+        # broadcast: points (n, 1, 2) - centers (m, 2) = (n, m, 2)
+        diff = points[:, np.newaxis, :] - cache["centers"]
+        # squared distances: (n, m)
+        dist_sq = np.sum(diff * diff, axis=2)
+        # check if inside any obstacle (using 85% inner radius)
+        inside = np.any(dist_sq < cache["inner_radii_sq"], axis=1)
+        return inside
+
+    def _get_nearby_obstacle_indices(self, x: float, y: float) -> list[int]:
+        """Get indices of obstacles that might affect this point.
+
+        uses KD-tree for O(log n) queries when available, falls back to
+        returning all obstacles for linear scan otherwise.
+
+        Args:
+            x: x position
+            y: y position
+
+        Returns:
+            list of obstacle indices to check
+        """
+        cache = self._build_obstacle_cache()
+        if cache["centers"].shape[0] == 0:
+            return []
+
+        kdtree = cache["kdtree"]
+        if kdtree is not None:
+            # use KD-tree to find obstacles within max influence radius
+            # this reduces O(m) to O(log m + k) where k is nearby count
+            nearby = kdtree.query_ball_point([x, y], cache["max_influence_radius"])
+            return nearby
+
+        # fallback: return all obstacle indices for linear scan
+        return list(range(len(self.obstacles)))
 
     def get_density_at(self, x: float, y: float) -> float:
         """Calculate point density at a position.
@@ -297,6 +410,8 @@ class PointClusterer:
         density is higher near obstacle edges and falls off with distance.
         the exclusion zone uses a fuzzy boundary with angular noise so the
         edge isn't a perfect circle.
+
+        uses KD-tree for O(log n) obstacle lookups when available.
 
         Args:
             x: x position
@@ -307,7 +422,11 @@ class PointClusterer:
         """
         density = 1.0
 
-        for obstacle in self.obstacles:
+        # use KD-tree to find only nearby obstacles when available
+        nearby_indices = self._get_nearby_obstacle_indices(x, y)
+
+        for idx in nearby_indices:
+            obstacle = self.obstacles[idx]
             # influence_radius is guaranteed to be set by __post_init__
             assert obstacle.influence_radius is not None
 
@@ -369,6 +488,8 @@ class PointClusterer:
     ) -> bool:
         """Check if a point is valid (not inside obstacle, not too close to others).
 
+        uses KD-tree for O(log n) obstacle lookups when available.
+
         Args:
             x: x position
             y: y position
@@ -382,13 +503,16 @@ class PointClusterer:
             return False
 
         # check obstacle collision using squared distance (avoids sqrt)
-        # uses tighter 85% radius
-        for obstacle in self.obstacles:
+        # uses tighter 85% radius and KD-tree for nearby obstacle lookup
+        cache = self._build_obstacle_cache()
+        nearby_indices = self._get_nearby_obstacle_indices(x, y)
+        for idx in nearby_indices:
+            obstacle = self.obstacles[idx]
             dx = x - obstacle.x
             dy = y - obstacle.y
             dist_sq = dx * dx + dy * dy
-            inner_radius = obstacle.radius * 0.85
-            if dist_sq < inner_radius * inner_radius:
+            inner_radius_sq = cache["inner_radii_sq"][idx]
+            if dist_sq < inner_radius_sq:
                 return False
 
         # check minimum distance from existing points using squared distance
@@ -482,38 +606,49 @@ class PointClusterer:
                 print(f"  ({px:.1f}, {py:.1f}): density={density:.3f}")
 
         # phase 1: generate jittered grid points for even base distribution
-        phase1_total = 0
+        # vectorized: generate all candidate positions at once
+        phase1_total = grid_rows * grid_cols
+
+        # create grid of cell centers
+        col_indices = np.arange(grid_cols)
+        row_indices = np.arange(grid_rows)
+        cols, rows = np.meshgrid(col_indices, row_indices)
+        cx = (cols.flatten() + 0.5) * cell_width
+        cy = (rows.flatten() + 0.5) * cell_height
+
+        # add random jitter (up to 40% of cell size)
+        jitter_x = self.rng.uniform(-0.4, 0.4, phase1_total) * cell_width
+        jitter_y = self.rng.uniform(-0.4, 0.4, phase1_total) * cell_height
+
+        px_all = cx + jitter_x
+        py_all = cy + jitter_y
+
+        # clamp to bounds
+        px_all = np.clip(px_all, 0, self.width - 1)
+        py_all = np.clip(py_all, 0, self.height - 1)
+
+        # vectorized obstacle exclusion check
+        candidate_points = np.column_stack([px_all, py_all])
+        inside_obstacle = self._check_obstacles_vectorized(candidate_points)
+
+        # density-based rejection sampling for remaining points
+        # (density calculation still per-point due to complex logic with fuzzy boundaries)
         phase1_rejected = 0
-        for row in range(grid_rows):
-            for col in range(grid_cols):
-                # center of cell
-                cx = (col + 0.5) * cell_width
-                cy = (row + 0.5) * cell_height
+        for i in range(phase1_total):
+            if inside_obstacle[i]:
+                phase1_rejected += 1
+                continue
 
-                # add random jitter (up to 40% of cell size)
-                jitter_x = self.rng.uniform(-0.4, 0.4) * cell_width
-                jitter_y = self.rng.uniform(-0.4, 0.4) * cell_height
-
-                px = cx + jitter_x
-                py = cy + jitter_y
-
-                # clamp to bounds
-                px = max(0, min(self.width - 1, px))
-                py = max(0, min(self.height - 1, py))
-
-                # density-based rejection sampling: accept points probabilistically
-                # based on density value, not just binary obstacle check.
-                # this creates a smooth gradient near obstacles instead of a hard ring.
-                phase1_total += 1
-                density = self.get_density_at(px, py)
-                if density <= 0:
-                    phase1_rejected += 1
-                    continue
-                acceptance_prob = density / max_density
-                if self.rng.uniform(0, 1) < acceptance_prob:
-                    points.append((px, py))
-                else:
-                    phase1_rejected += 1
+            px, py = px_all[i], py_all[i]
+            density = self.get_density_at(px, py)
+            if density <= 0:
+                phase1_rejected += 1
+                continue
+            acceptance_prob = density / max_density
+            if self.rng.uniform(0, 1) < acceptance_prob:
+                points.append((px, py))
+            else:
+                phase1_rejected += 1
 
         if self.verbose:
             print(f"Phase 1: generated {len(points)} points from {grid_rows}x{grid_cols} grid ({phase1_total} total, {phase1_rejected} rejected)")

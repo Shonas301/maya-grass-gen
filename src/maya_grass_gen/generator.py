@@ -294,6 +294,10 @@ class GrassGenerator:
         ray_y = (self.terrain.bounds.max_y if self.terrain.bounds else 1000.0) + 100.0
         ray_dir = om2.MFloatVector(0, -1, 0)
 
+        # build acceleration structure once for faster repeated raycasts
+        # this caches spatial data for O(log n) queries instead of O(n)
+        accel_params = mesh_fn.autoUniformGridParams()
+
         tilts = []
         height_snapped = 0
         raycast_hits = 0
@@ -301,6 +305,7 @@ class GrassGenerator:
         for point in self._grass_points:
             try:
                 # cast ray downward from above terrain to find surface at this XZ
+                # uses cached acceleration structure for faster repeated queries
                 ray_source = om2.MFloatPoint(point.x, ray_y, point.z)
                 hit_point, hit_param, hit_face, _hit_tri, _bary1, _bary2 = (
                     mesh_fn.closestIntersection(
@@ -308,6 +313,7 @@ class GrassGenerator:
                         om2.MSpace.kWorld,
                         ray_y + abs(self.terrain.bounds.min_y if self.terrain.bounds else 0) + 200.0,
                         False,
+                        accelParams=accel_params,
                     )
                 )
 
