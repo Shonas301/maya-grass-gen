@@ -264,6 +264,7 @@ class PointClusterer:
         config: ClusteringConfig | None = None,
         obstacles: list[Obstacle] | None = None,
         seed: int | None = None,
+        verbose: bool = False,
     ) -> None:
         """Initialize point clusterer.
 
@@ -273,12 +274,14 @@ class PointClusterer:
             config: clustering configuration
             obstacles: list of obstacles to cluster around
             seed: random seed for reproducibility
+            verbose: if True, print progress and diagnostic messages
         """
         self.width = width
         self.height = height
         self.config = config or ClusteringConfig()
         self.obstacles = obstacles or []
         self.rng = np.random.default_rng(seed)
+        self.verbose = verbose
 
     def add_obstacle(self, obstacle: Obstacle) -> None:
         """Add an obstacle to cluster around.
@@ -450,7 +453,7 @@ class PointClusterer:
         points: list[tuple[float, float]] = []
 
         # debug: sample density at a few grid positions
-        if grid_rows > 0 and grid_cols > 0:
+        if self.verbose and grid_rows > 0 and grid_cols > 0:
             sample_positions = [
                 (cell_width * 0.5, cell_height * 0.5),  # bottom-left
                 (cell_width * (grid_cols - 0.5), cell_height * 0.5),  # bottom-right
@@ -497,7 +500,8 @@ class PointClusterer:
                 else:
                     phase1_rejected += 1
 
-        print(f"Phase 1: generated {len(points)} points from {grid_rows}x{grid_cols} grid ({phase1_total} total, {phase1_rejected} rejected)")
+        if self.verbose:
+            print(f"Phase 1: generated {len(points)} points from {grid_rows}x{grid_cols} grid ({phase1_total} total, {phase1_rejected} rejected)")
 
         # phase 2: add extra points clustered around obstacle edges
         phase2_added = 0
@@ -511,7 +515,8 @@ class PointClusterer:
                 int((num_points * extra_ratio) / (len(self.obstacles) * 20)),
                 int(num_points * 0.02),  # cap at 2% of target per obstacle
             )
-            print(f"Phase 2: attempting {extra_points_per_obstacle} extra points per obstacle ({len(self.obstacles)} obstacles)")
+            if self.verbose:
+                print(f"Phase 2: attempting {extra_points_per_obstacle} extra points per obstacle ({len(self.obstacles)} obstacles)")
 
             for obstacle in self.obstacles:
                 # influence_radius is guaranteed to be set by __post_init__
@@ -544,12 +549,14 @@ class PointClusterer:
                         points.append((px, py))
                         phase2_added += 1
 
-            print(f"Phase 2: added {phase2_added} extra points around obstacles")
+            if self.verbose:
+                print(f"Phase 2: added {phase2_added} extra points around obstacles")
 
-        print(f"Total points generated: {len(points)} (target was {num_points})")
+        if self.verbose:
+            print(f"Total points generated: {len(points)} (target was {num_points})")
 
         # density diagnostics: sample density at generated points to validate gradient
-        if points and self.obstacles:
+        if self.verbose and points and self.obstacles:
             sample_size = min(len(points), 200)
             sample_indices = self.rng.choice(len(points), sample_size, replace=False)
             densities = [self.get_density_at(points[i][0], points[i][1]) for i in sample_indices]

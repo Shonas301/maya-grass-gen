@@ -351,6 +351,10 @@ class TestImportWithoutMaya:
         assert sig.parameters["seed"].default == DEFAULT_SEED
         assert sig.parameters["proximity_density_boost"].default == 1.0
 
+        # verify verbose param exists with False default
+        assert "verbose" in params
+        assert sig.parameters["verbose"].default is False
+
     def test_validate_params_works_without_maya(self) -> None:
         """_validate_params should work without Maya (no maya imports)."""
         # this function shouldn't need maya at all

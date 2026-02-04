@@ -228,6 +228,7 @@ def generate_grass(
     edge_offset: float = 10.0,
     persistence: float = 0.5,
     gravity_weight: float = 0.75,
+    verbose: bool = False,
 ) -> str:
     """Generate animated grass on a terrain mesh.
 
@@ -267,6 +268,7 @@ def generate_grass(
         gravity_weight: blend between surface normal and world-up for grass
             orientation on slopes. 0.0 = perpendicular to surface, 1.0 = always
             vertical, 0.75 = mostly vertical with slight terrain influence (default)
+        verbose: if True, print progress and diagnostic messages (default: False)
 
     Returns:
         name of created MASH network for further manipulation
@@ -289,25 +291,26 @@ def generate_grass(
     start_time = time.time()
 
     # print all input parameters
-    print(f"generate_grass called with parameters:")
-    print(f"  terrain_mesh: {terrain_mesh}")
-    print(f"  grass_geometry: {grass_geometry}")
-    print(f"  count: {count}")
-    print(f"  wind_strength: {wind_strength}")
-    print(f"  scale_variation_wave1: {scale_variation_wave1}")
-    print(f"  scale_variation_wave2: {scale_variation_wave2}")
-    print(f"  seed: {seed}")
-    print(f"  noise_scale: {noise_scale}")
-    print(f"  octaves: {octaves}")
-    print(f"  time_scale: {time_scale}")
-    print(f"  proximity_density_boost: {proximity_density_boost}")
-    print(f"  network_name: {network_name}")
-    print(f"  min_distance: {min_distance}")
-    print(f"  max_lean_angle: {max_lean_angle}")
-    print(f"  cluster_falloff: {cluster_falloff}")
-    print(f"  edge_offset: {edge_offset}")
-    print(f"  persistence: {persistence}")
-    print(f"  gravity_weight: {gravity_weight}")
+    if verbose:
+        print("generate_grass called with parameters:")
+        print(f"  terrain_mesh: {terrain_mesh}")
+        print(f"  grass_geometry: {grass_geometry}")
+        print(f"  count: {count}")
+        print(f"  wind_strength: {wind_strength}")
+        print(f"  scale_variation_wave1: {scale_variation_wave1}")
+        print(f"  scale_variation_wave2: {scale_variation_wave2}")
+        print(f"  seed: {seed}")
+        print(f"  noise_scale: {noise_scale}")
+        print(f"  octaves: {octaves}")
+        print(f"  time_scale: {time_scale}")
+        print(f"  proximity_density_boost: {proximity_density_boost}")
+        print(f"  network_name: {network_name}")
+        print(f"  min_distance: {min_distance}")
+        print(f"  max_lean_angle: {max_lean_angle}")
+        print(f"  cluster_falloff: {cluster_falloff}")
+        print(f"  edge_offset: {edge_offset}")
+        print(f"  persistence: {persistence}")
+        print(f"  gravity_weight: {gravity_weight}")
 
     # validate inputs before doing any work
     _validate_mesh_exists(terrain_mesh, "Terrain mesh")
@@ -329,17 +332,18 @@ def generate_grass(
     from maya_grass_gen.noise_utils import init_noise
 
     init_noise(seed)
-    print(f"noise initialized with seed {seed}")
+    if verbose:
+        print(f"noise initialized with seed {seed}")
 
     # create terrain analyzer and grass generator
-    terrain = TerrainAnalyzer(mesh_name=terrain_mesh)
+    terrain = TerrainAnalyzer(mesh_name=terrain_mesh, verbose=verbose)
     bounds = terrain.bounds
-    if bounds:
+    if verbose and bounds:
         print(f"terrain bounds: min_x={bounds.min_x:.2f}, max_x={bounds.max_x:.2f}, "
               f"min_z={bounds.min_z:.2f}, max_z={bounds.max_z:.2f}, "
               f"width={bounds.width:.2f}, depth={bounds.depth:.2f}")
 
-    generator = GrassGenerator(terrain=terrain)
+    generator = GrassGenerator(terrain=terrain, verbose=verbose)
 
     # configure wind field
     generator.configure_wind(
@@ -350,9 +354,10 @@ def generate_grass(
         persistence=persistence,
         max_lean_angle=max_lean_angle,
     )
-    print(f"wind configured: noise_scale={noise_scale}, wind_strength={wind_strength}, "
-          f"time_scale={time_scale}, octaves={octaves}, persistence={persistence}, "
-          f"max_lean_angle={max_lean_angle}")
+    if verbose:
+        print(f"wind configured: noise_scale={noise_scale}, wind_strength={wind_strength}, "
+              f"time_scale={time_scale}, octaves={octaves}, persistence={persistence}, "
+              f"max_lean_angle={max_lean_angle}")
 
     # configure terrain-aware grass orientation
     generator.set_gravity_weight(gravity_weight)
@@ -361,7 +366,8 @@ def generate_grass(
     obstacle_count = generator.detect_scene_obstacles(
         exclude_objects=[terrain_mesh, grass_geometry],
     )
-    print(f"detected {obstacle_count} scene obstacles")
+    if verbose:
+        print(f"detected {obstacle_count} scene obstacles")
 
     # configure clustering with proximity density boost and new params
     generator.configure_clustering(
@@ -378,7 +384,8 @@ def generate_grass(
         scale_variation_wave1=scale_variation_wave1,
         scale_variation_wave2=scale_variation_wave2,
     )
-    print(f"generated {point_count} grass points")
+    if verbose:
+        print(f"generated {point_count} grass points")
 
     # create unique MASH network name if not provided
     if network_name is None:
@@ -392,9 +399,11 @@ def generate_grass(
         distribute_on_mesh=True,
         terrain_mesh=terrain_mesh,
     )
-    print(f"created MASH network: {network_name}")
+    if verbose:
+        print(f"created MASH network: {network_name}")
 
     elapsed = time.time() - start_time
-    print(f"grass generation complete in {elapsed:.2f}s")
+    if verbose:
+        print(f"grass generation complete in {elapsed:.2f}s")
 
     return network_name

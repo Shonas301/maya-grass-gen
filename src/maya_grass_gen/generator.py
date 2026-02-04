@@ -90,15 +90,18 @@ class GrassGenerator:
         self,
         terrain: TerrainAnalyzer | None = None,
         wind: WindField | None = None,
+        verbose: bool = False,
     ) -> None:
         """Initialize grass generator.
 
         Args:
             terrain: terrain analyzer (created if not provided)
             wind: wind field (created if not provided)
+            verbose: if True, print progress and diagnostic messages
         """
         self.terrain = terrain or TerrainAnalyzer()
         self.wind = wind or WindField()
+        self.verbose = verbose
         self._grass_points: list[GrassPoint] = []
         self._clustering_config: dict = {
             "min_distance": 5.0,
@@ -113,8 +116,11 @@ class GrassGenerator:
         self._terrain_tilts: list[tuple[float, float]] = []
 
     @classmethod
-    def from_selection(cls) -> GrassGenerator:
+    def from_selection(cls, verbose: bool = False) -> GrassGenerator:
         """Create generator from currently selected mesh in Maya.
+
+        Args:
+            verbose: if True, print progress and diagnostic messages
 
         Returns:
             GrassGenerator configured for selected mesh
@@ -132,9 +138,9 @@ class GrassGenerator:
             raise RuntimeError(msg)
 
         mesh_name = selection[0]
-        terrain = TerrainAnalyzer(mesh_name=mesh_name)
+        terrain = TerrainAnalyzer(mesh_name=mesh_name, verbose=verbose)
 
-        return cls(terrain=terrain)
+        return cls(terrain=terrain, verbose=verbose)
 
     @classmethod
     def from_bounds(
@@ -143,6 +149,7 @@ class GrassGenerator:
         max_x: float,
         min_z: float,
         max_z: float,
+        verbose: bool = False,
     ) -> GrassGenerator:
         """Create generator with manual bounds.
 
@@ -151,14 +158,15 @@ class GrassGenerator:
             max_x: maximum x coordinate
             min_z: minimum z coordinate
             max_z: maximum z coordinate
+            verbose: if True, print progress and diagnostic messages
 
         Returns:
             configured GrassGenerator
         """
-        terrain = TerrainAnalyzer()
+        terrain = TerrainAnalyzer(verbose=verbose)
         terrain.set_bounds_manual(min_x, max_x, min_z, max_z)
 
-        return cls(terrain=terrain)
+        return cls(terrain=terrain, verbose=verbose)
 
     @property
     def grass_points(self) -> list[GrassPoint]:
@@ -273,7 +281,8 @@ class GrassGenerator:
             mesh_fn = om2.MFnMesh(dag_path)
         except Exception:
             # maya API not functional (mocked or unavailable)
-            print(f"[terrain] maya API unavailable, using zero tilts")
+            if self.verbose:
+                print("[terrain] maya API unavailable, using zero tilts")
             self._terrain_tilts = [(0.0, 0.0)] * len(self._grass_points)
             return
 
@@ -350,7 +359,7 @@ class GrassGenerator:
         self._terrain_tilts = tilts
 
         # height diagnostics
-        if self._grass_points:
+        if self.verbose and self._grass_points:
             heights = [p.y for p in self._grass_points]
             print(f"[terrain height] snapped {height_snapped}/{len(self._grass_points)} "
                   f"points to mesh surface "
@@ -358,7 +367,7 @@ class GrassGenerator:
             print(f"[terrain height] Y range: min={min(heights):.3f}, "
                   f"max={max(heights):.3f}, mean={sum(heights)/len(heights):.3f}")
 
-        if not skip_tilt:
+        if self.verbose and not skip_tilt:
             print(f"[terrain tilt] computed {len(tilts)} normals "
                   f"(gravity_weight={g:.2f})")
             if tilts:
@@ -502,7 +511,8 @@ class GrassGenerator:
         Returns:
             actual number of points generated
         """
-        print(f"generating {count} points with seed={seed}")
+        if self.verbose:
+            print(f"generating {count} points with seed={seed}")
 
         bounds = self.terrain.bounds
         if bounds is None:
@@ -514,16 +524,20 @@ class GrassGenerator:
         # track which wave is used for scale variation
         if CLUSTERING_AVAILABLE and self.terrain.obstacles:
             # use clustered point generation (wave 2)
-            print(f"using clustered point generation ({len(self.terrain.obstacles)} obstacles)")
+            if self.verbose:
+                print(f"using clustered point generation ({len(self.terrain.obstacles)} obstacles)")
             points = self._generate_clustered_points(count, seed)
             scale_range = scale_variation_wave2
-            print(f"using wave 2 scale range: {scale_range[0]} to {scale_range[1]}")
+            if self.verbose:
+                print(f"using wave 2 scale range: {scale_range[0]} to {scale_range[1]}")
         else:
             # fall back to uniform random distribution (wave 1)
-            print("using uniform point generation (no obstacles)")
+            if self.verbose:
+                print("using uniform point generation (no obstacles)")
             points = self._generate_uniform_points(count, rng)
             scale_range = scale_variation_wave1
-            print(f"using wave 1 scale range: {scale_range[0]} to {scale_range[1]}")
+            if self.verbose:
+                print(f"using wave 1 scale range: {scale_range[0]} to {scale_range[1]}")
 
         # convert to grass points with wind orientation
         self._grass_points = []
@@ -555,14 +569,15 @@ class GrassGenerator:
             )
 
         # scale diagnostics
-        if self._grass_points:
+        if self.verbose and self._grass_points:
             all_scales = [p.scale for p in self._grass_points]
             print(f"[scale diagnostics] {len(all_scales)} points: "
                   f"min={min(all_scales):.3f}, max={max(all_scales):.3f}, "
                   f"mean={sum(all_scales)/len(all_scales):.3f}, "
                   f"range=({scale_range[0]}, {scale_range[1]})")
 
-        print(f"point generation complete: {len(self._grass_points)} points")
+        if self.verbose:
+            print(f"point generation complete: {len(self._grass_points)} points")
         return len(self._grass_points)
 
     def _generate_clustered_points(
@@ -585,7 +600,7 @@ class GrassGenerator:
         flow_obstacles = [o.to_flow_obstacle() for o in self.terrain.obstacles]
 
         # debug: print obstacle statistics
-        if flow_obstacles:
+        if self.verbose and flow_obstacles:
             radii = [obs["radius"] for obs in flow_obstacles]
             influence_radii = [obs.get("influence_radius", obs["radius"] * 2.5) for obs in flow_obstacles]
             print(f"obstacle radii: min={min(radii):.1f}, max={max(radii):.1f}, avg={sum(radii)/len(radii):.1f}")
@@ -599,6 +614,7 @@ class GrassGenerator:
             config=config,
             obstacles=[],  # add manually with correct coordinate mapping
             seed=seed,
+            verbose=self.verbose,
         )
 
         # add obstacles with coordinate adjustment
@@ -699,7 +715,8 @@ class GrassGenerator:
         if not MAYA_AVAILABLE:
             return None
 
-        print(f"creating MASH network '{network_name}'")
+        if self.verbose:
+            print(f"creating MASH network '{network_name}'")
 
         # snap grass heights to mesh surface and compute slope-aware orientation
         target_mesh = terrain_mesh or self.terrain.mesh_name
@@ -721,18 +738,21 @@ class GrassGenerator:
         if distribute_on_mesh:
             # use mesh surface distribution
             # (scale is handled per-point in the Python node, not via scale_range)
-            print("distribution mode: mesh")
+            if self.verbose:
+                print("distribution mode: mesh")
             return self._create_mesh_distributed_network(
                 mash_network, terrain_mesh, network_name
             )
 
-        print("distribution mode: point-based")
+        if self.verbose:
+            print("distribution mode: point-based")
 
         try:
             # point-based distribution (pre-computed positions with animated wind)
             distribute = mash_network.addNode("MASH_Distribute")
             distribute_name = self._get_mash_node_name(distribute, "Distribute", network_name)
-            print(f"added MASH node: {distribute_name}")
+            if self.verbose:
+                print(f"added MASH node: {distribute_name}")
             cmds.setAttr(f"{distribute_name}.pointCount", len(self._grass_points))
 
             mash_network.setPointCount(len(self._grass_points))
@@ -740,7 +760,8 @@ class GrassGenerator:
             # set positions via MASH python node with animated wind
             python_node = mash_network.addNode("MASH_Python")
             python_node_name = self._get_mash_node_name(python_node, "Python", network_name)
-            print(f"added MASH node: {python_node_name}")
+            if self.verbose:
+                print(f"added MASH node: {python_node_name}")
 
             # generate animated wind code that recalculates rotation each frame
             wind_code = self._generate_point_based_wind_code()
@@ -749,7 +770,8 @@ class GrassGenerator:
             msg = f"failed to create MASH network '{network_name}': {e}"
             raise RuntimeError(msg) from e
 
-        print("MASH network ready")
+        if self.verbose:
+            print("MASH network ready")
         return network_name
 
     def _get_mash_node_name(self, node_wrapper: Any, node_type: str, network_name: str = "") -> str:
@@ -822,13 +844,16 @@ class GrassGenerator:
         try:
             # use the proper MASH API for mesh-based distribution
             # meshDistribute() handles all internal wiring automatically
-            print(f"setting up mesh distribution on '{target_mesh}'")
+            if self.verbose:
+                print(f"setting up mesh distribution on '{target_mesh}'")
             mash_network.meshDistribute(target_mesh)
-            print(f"meshDistribute complete")
+            if self.verbose:
+                print("meshDistribute complete")
 
             # set point count
             point_count = len(self._grass_points)
-            print(f"setting point count to {point_count}")
+            if self.verbose:
+                print(f"setting point count to {point_count}")
             mash_network.setPointCount(point_count)
 
             # scale is handled per-point in the python node (not via MASH Random
@@ -837,17 +862,20 @@ class GrassGenerator:
 
             # get waiter name for python node
             waiter_name = mash_network.waiter
-            print(f"waiter name: {waiter_name}")
+            if self.verbose:
+                print(f"waiter name: {waiter_name}")
 
             # add python node for wind-based orientation
             python_node = mash_network.addNode("MASH_Python")
             wrapper_name = python_node.name
-            print(f"python node wrapper reports: {wrapper_name}")
+            if self.verbose:
+                print(f"python node wrapper reports: {wrapper_name}")
 
             # find the actual python node (wrapper.name may have numeric suffix)
             all_pythons = cmds.ls(type="MASH_Python") or []
             matching = [p for p in all_pythons if p.startswith(waiter_name)]
-            print(f"MASH_Python nodes matching '{waiter_name}': {matching}")
+            if self.verbose:
+                print(f"MASH_Python nodes matching '{waiter_name}': {matching}")
 
             # prefer node without trailing digit, fallback to first match
             python_node_name = None
@@ -860,7 +888,8 @@ class GrassGenerator:
             if not python_node_name:
                 python_node_name = wrapper_name  # last resort
 
-            print(f"using python node: {python_node_name}")
+            if self.verbose:
+                print(f"using python node: {python_node_name}")
 
             # verify python node exists and has pyScript attr
             if not cmds.objExists(python_node_name):
@@ -871,13 +900,15 @@ class GrassGenerator:
 
             # generate wind expression that updates with time
             wind_code = self._generate_wind_python_code()
-            print(f"setting python code ({len(wind_code)} chars) on {python_node_name}")
+            if self.verbose:
+                print(f"setting python code ({len(wind_code)} chars) on {python_node_name}")
             cmds.setAttr(f"{python_node_name}.pyScript", wind_code, type="string")
         except RuntimeError as e:
             msg = f"failed to create mesh-distributed MASH network '{network_name}': {e}"
             raise RuntimeError(msg) from e
 
-        print("MASH network ready")
+        if self.verbose:
+            print("MASH network ready")
         return network_name
 
     def _generate_point_based_wind_code(self) -> str:

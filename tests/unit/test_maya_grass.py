@@ -1207,3 +1207,56 @@ class TestTerrainHeightSnapping:
         gen._compute_terrain_tilts("fake_mesh")
         assert len(gen._terrain_tilts) == len(gen._grass_points)
         assert all(t == (0.0, 0.0) for t in gen._terrain_tilts)
+
+
+class TestVerboseParameter:
+    """Tests for verbose parameter to control console output."""
+
+    def test_generator_verbose_default_false(self) -> None:
+        """test that GrassGenerator.verbose defaults to False."""
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100)
+        assert gen.verbose is False
+
+    def test_generator_accepts_verbose_true(self) -> None:
+        """test that GrassGenerator accepts verbose=True."""
+        terrain = TerrainAnalyzer()
+        terrain.set_bounds_manual(0, 100, 0, 100)
+        gen = GrassGenerator(terrain=terrain, verbose=True)
+        assert gen.verbose is True
+
+    def test_terrain_analyzer_verbose_default_false(self) -> None:
+        """test that TerrainAnalyzer.verbose defaults to False."""
+        analyzer = TerrainAnalyzer()
+        assert analyzer.verbose is False
+
+    def test_terrain_analyzer_accepts_verbose_true(self) -> None:
+        """test that TerrainAnalyzer accepts verbose=True."""
+        analyzer = TerrainAnalyzer(verbose=True)
+        assert analyzer.verbose is True
+
+    def test_verbose_false_suppresses_output(self, capsys) -> None:
+        """test that verbose=False produces no output during generation."""
+        # given
+        gen = GrassGenerator.from_bounds(0, 100, 0, 100, verbose=False)
+
+        # when
+        gen.generate_points(count=50, seed=42)
+
+        # then - no output captured
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_verbose_true_produces_output(self, capsys) -> None:
+        """test that verbose=True produces output during generation."""
+        # given
+        terrain = TerrainAnalyzer(verbose=True)
+        terrain.set_bounds_manual(0, 100, 0, 100)
+        gen = GrassGenerator(terrain=terrain, verbose=True)
+
+        # when
+        gen.generate_points(count=50, seed=42)
+
+        # then - should have some output
+        captured = capsys.readouterr()
+        assert len(captured.out) > 0
+        assert "generating" in captured.out.lower() or "points" in captured.out.lower()

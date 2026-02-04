@@ -107,15 +107,18 @@ class TerrainAnalyzer:
         self,
         mesh_name: str | None = None,
         bounds: TerrainBounds | None = None,
+        verbose: bool = False,
     ) -> None:
         """Initialize terrain analyzer.
 
         Args:
             mesh_name: name of maya mesh to analyze (requires maya)
             bounds: manual bounds if not using maya mesh
+            verbose: if True, print progress and diagnostic messages
         """
         self.mesh_name = mesh_name
         self._bounds = bounds
+        self.verbose = verbose
         self._obstacles: list[DetectedObstacle] = []
         self._bump_map: np.ndarray | None = None
         self._bump_map_path: str | None = None
@@ -128,7 +131,8 @@ class TerrainAnalyzer:
         if not MAYA_AVAILABLE or not self.mesh_name:
             return
 
-        print(f"analyzing mesh '{self.mesh_name}'")
+        if self.verbose:
+            print(f"analyzing mesh '{self.mesh_name}'")
 
         # get bounding box
         bbox = cmds.exactWorldBoundingBox(self.mesh_name)
@@ -141,8 +145,9 @@ class TerrainAnalyzer:
             max_z=bbox[5],
         )
 
-        print(f"terrain bounds: min_x={bbox[0]:.2f}, max_x={bbox[3]:.2f}, "
-              f"min_z={bbox[2]:.2f}, max_z={bbox[5]:.2f}")
+        if self.verbose:
+            print(f"terrain bounds: min_x={bbox[0]:.2f}, max_x={bbox[3]:.2f}, "
+                  f"min_z={bbox[2]:.2f}, max_z={bbox[5]:.2f}")
 
     @property
     def bounds(self) -> TerrainBounds | None:
@@ -254,7 +259,8 @@ class TerrainAnalyzer:
         Returns:
             list of detected obstacles
         """
-        print(f"detecting obstacles from bump map (threshold={threshold})")
+        if self.verbose:
+            print(f"detecting obstacles from bump map (threshold={threshold})")
 
         if self._bump_map is None or self._bounds is None:
             return []
@@ -349,7 +355,8 @@ class TerrainAnalyzer:
             obstacles = self._merge_obstacles(obstacles, merge_distance)
 
         self._obstacles = obstacles
-        print(f"found {len(obstacles)} obstacles from bump map")
+        if self.verbose:
+            print(f"found {len(obstacles)} obstacles from bump map")
         return obstacles
 
     def _merge_obstacles(
@@ -515,7 +522,8 @@ class TerrainAnalyzer:
         Returns:
             list of detected obstacles from scene geometry
         """
-        print("scanning scene for obstacles...")
+        if self.verbose:
+            print("scanning scene for obstacles...")
 
         if not MAYA_AVAILABLE:
             return []
@@ -529,16 +537,17 @@ class TerrainAnalyzer:
                 self._bounds.width**2 + self._bounds.depth**2
             )
             max_obstacle_radius = terrain_diagonal * 0.25
-            print(f"max obstacle radius (auto): {max_obstacle_radius:.1f} "
-                  f"(25% of terrain diagonal {terrain_diagonal:.1f})")
-        else:
+            if self.verbose:
+                print(f"max obstacle radius (auto): {max_obstacle_radius:.1f} "
+                      f"(25% of terrain diagonal {terrain_diagonal:.1f})")
+        elif self.verbose:
             print(f"max obstacle radius (user): {max_obstacle_radius:.1f}")
 
         exclude = set(exclude_objects or [])
         if self.mesh_name:
             exclude.add(self.mesh_name)
 
-        if exclude:
+        if self.verbose and exclude:
             print(f"excluding: {exclude}")
 
         detected: list[DetectedObstacle] = []
@@ -551,7 +560,8 @@ class TerrainAnalyzer:
             if parent:
                 transforms.add(parent[0])
 
-        print(f"found {len(transforms)} mesh transforms to check")
+        if self.verbose:
+            print(f"found {len(transforms)} mesh transforms to check")
 
         for transform in transforms:
             # get short name for exclusion check
@@ -581,8 +591,9 @@ class TerrainAnalyzer:
             # allow some tolerance for objects sitting on terrain
             height_tolerance = 50.0  # units above terrain max_y
             if obj_min_y > self._bounds.max_y + height_tolerance:
-                print(f"  skipping {short_name}: floating above terrain "
-                      f"(min_y={obj_min_y:.1f} > terrain max_y={self._bounds.max_y:.1f})")
+                if self.verbose:
+                    print(f"  skipping {short_name}: floating above terrain "
+                          f"(min_y={obj_min_y:.1f} > terrain max_y={self._bounds.max_y:.1f})")
                 continue
 
             # calculate center and radius from bounding box
@@ -599,14 +610,16 @@ class TerrainAnalyzer:
 
             # filter out obstacles that are too large (background/environment objects)
             if radius > max_obstacle_radius:
-                print(f"  skipping {short_name}: radius {radius:.1f} exceeds max {max_obstacle_radius:.1f} "
-                      f"(likely background object)")
+                if self.verbose:
+                    print(f"  skipping {short_name}: radius {radius:.1f} exceeds max {max_obstacle_radius:.1f} "
+                          f"(likely background object)")
                 continue
 
             height = obj_max_y - obj_min_y
 
             # print individual obstacle info
-            print(f"  obstacle: {short_name} at ({center_x:.1f}, {center_z:.1f}) r={radius:.1f}")
+            if self.verbose:
+                print(f"  obstacle: {short_name} at ({center_x:.1f}, {center_z:.1f}) r={radius:.1f}")
 
             detected.append(
                 DetectedObstacle(
@@ -618,10 +631,11 @@ class TerrainAnalyzer:
                 )
             )
 
-        print(f"detected {len(detected)} scene obstacles")
+        if self.verbose:
+            print(f"detected {len(detected)} scene obstacles")
 
         # debug: show obstacle coverage statistics
-        if detected:
+        if self.verbose and detected:
             total_area = self._bounds.width * self._bounds.depth if self._bounds else 0
             obstacle_area = sum(np.pi * obs.radius**2 for obs in detected)
             coverage_pct = (obstacle_area / total_area * 100) if total_area > 0 else 0
@@ -631,11 +645,11 @@ class TerrainAnalyzer:
 
             # show a few sample obstacles to see what's being detected
             if len(detected) <= 5:
-                print(f"  all obstacles:")
+                print("  all obstacles:")
                 for obs in detected:
                     print(f"    {obs.source}: pos=({obs.center_x:.1f},{obs.center_z:.1f}), r={obs.radius:.1f}")
             else:
-                print(f"  first 5 obstacles:")
+                print("  first 5 obstacles:")
                 for obs in detected[:5]:
                     print(f"    {obs.source}: pos=({obs.center_x:.1f},{obs.center_z:.1f}), r={obs.radius:.1f}")
 
@@ -674,7 +688,8 @@ class TerrainAnalyzer:
                 min_radius=min_radius,
                 merge_distance=0,  # merge later
             )
-            print(f"bump map obstacles: {len(bump_obstacles)}")
+            if self.verbose:
+                print(f"bump map obstacles: {len(bump_obstacles)}")
             all_obstacles.extend(bump_obstacles)
 
         # detect from scene objects
@@ -684,13 +699,15 @@ class TerrainAnalyzer:
                 min_radius=min_radius,
                 max_obstacle_radius=max_obstacle_radius,
             )
-            print(f"scene obstacles: {len(scene_obstacles)}")
+            if self.verbose:
+                print(f"scene obstacles: {len(scene_obstacles)}")
             all_obstacles.extend(scene_obstacles)
 
         # merge all obstacles
         if merge_distance > 0:
             all_obstacles = self._merge_obstacles(all_obstacles, merge_distance)
-            print(f"after merge: {len(all_obstacles)} total obstacles")
+            if self.verbose:
+                print(f"after merge: {len(all_obstacles)} total obstacles")
 
         self._obstacles = all_obstacles
         return all_obstacles
