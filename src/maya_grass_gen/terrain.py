@@ -377,6 +377,9 @@ class TerrainAnalyzer:
         merged: list[DetectedObstacle] = []
         used = [False] * len(obstacles)
 
+        # pre-compute squared merge distance for faster comparison
+        merge_distance_sq = merge_distance * merge_distance
+
         for i, obs1 in enumerate(obstacles):
             if used[i]:
                 continue
@@ -389,11 +392,12 @@ class TerrainAnalyzer:
                 if used[j]:
                     continue
 
-                dist = np.sqrt(
+                # use squared distance to avoid sqrt
+                dist_sq = (
                     (obs1.center_x - obs2.center_x) ** 2
                     + (obs1.center_z - obs2.center_z) ** 2
                 )
-                if dist < merge_distance:
+                if dist_sq < merge_distance_sq:
                     group.append(obs2)
                     used[j] = True
 
@@ -407,6 +411,7 @@ class TerrainAnalyzer:
                 cz = sum(o.center_z * o.radius**2 for o in group) / total_weight
 
                 # radius is max distance from centroid plus original radius
+                # need actual distance here for the final radius calculation
                 max_extent = 0.0
                 for o in group:
                     dist = np.sqrt((o.center_x - cx) ** 2 + (o.center_z - cz) ** 2)

@@ -540,31 +540,38 @@ class GrassGenerator:
                 print(f"using wave 1 scale range: {scale_range[0]} to {scale_range[1]}")
 
         # convert to grass points with wind orientation
+        # pre-generate random values for all points at once (vectorized)
+        num_points = len(points)
+        if random_rotation:
+            base_rotations = rng.uniform(0, 360, num_points)
+        else:
+            base_rotations = np.zeros(num_points)
+        scales = rng.uniform(scale_range[0], scale_range[1], num_points)
+
+        # pre-compute max lean for clamping
+        max_lean = self._max_lean_angle
+
         self._grass_points = []
-        for x, z in points:
-            # get wind angle at this position
-            wind_angle = self.wind.get_wind_angle_degrees(x, z)
-
-            # calculate lean based on wind strength
+        for i, (x, z) in enumerate(points):
+            # get wind vector at this position
             wind_x, wind_z = self.wind.get_wind_at(x, z)
-            wind_magnitude = math.sqrt(wind_x**2 + wind_z**2)
-            lean_angle = min(self._max_lean_angle, wind_magnitude * 10)
 
-            # random rotation for variety
-            base_rotation = rng.uniform(0, 360) if random_rotation else 0
-
-            # random scale using the appropriate wave's range
-            scale = rng.uniform(scale_range[0], scale_range[1])
+            # calculate lean and angle from wind vector
+            # use squared magnitude comparison where possible
+            wind_mag_sq = wind_x * wind_x + wind_z * wind_z
+            wind_magnitude = math.sqrt(wind_mag_sq)
+            lean_angle = min(max_lean, wind_magnitude * 10)
+            wind_angle = math.degrees(math.atan2(wind_z, wind_x))
 
             self._grass_points.append(
                 GrassPoint(
                     x=x,
                     y=height,
                     z=z,
-                    rotation_y=base_rotation,
+                    rotation_y=base_rotations[i],
                     lean_angle=lean_angle,
                     lean_direction=wind_angle,
-                    scale=scale,
+                    scale=scales[i],
                 )
             )
 
@@ -657,16 +664,22 @@ class GrassGenerator:
         if bounds is None:
             return []
 
+        # pre-compute obstacle data to avoid repeated calculations
+        obstacle_data = [
+            (obs.center_x, obs.center_z, obs.radius * obs.radius)
+            for obs in self.terrain.obstacles
+        ]
+
         points = []
         for _ in range(count):
             x = rng.uniform(bounds.min_x, bounds.max_x)
             z = rng.uniform(bounds.min_z, bounds.max_z)
 
-            # check not inside obstacle
+            # check not inside obstacle using squared distance (avoids sqrt)
             valid = True
-            for obs in self.terrain.obstacles:
-                dist = math.sqrt((x - obs.center_x) ** 2 + (z - obs.center_z) ** 2)
-                if dist < obs.radius:
+            for obs_x, obs_z, radius_sq in obstacle_data:
+                dist_sq = (x - obs_x) ** 2 + (z - obs_z) ** 2
+                if dist_sq < radius_sq:
                     valid = False
                     break
 

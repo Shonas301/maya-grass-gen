@@ -311,15 +311,27 @@ class PointClusterer:
             # influence_radius is guaranteed to be set by __post_init__
             assert obstacle.influence_radius is not None
 
-            # distance from obstacle center
+            # distance from obstacle center - use squared for early rejection
             dx = x - obstacle.x
             dy = y - obstacle.y
-            dist = np.sqrt(dx**2 + dy**2)
+            dist_sq = dx * dx + dy * dy
 
             # hard exclusion at 85% of radius (tighter to actual geometry)
+            # use squared comparison to avoid sqrt
             inner_radius = obstacle.radius * 0.85
-            if dist < inner_radius:
+            inner_radius_sq = inner_radius * inner_radius
+            if dist_sq < inner_radius_sq:
                 return 0.0
+
+            # beyond inner radius, we need actual distance for calculations
+            # check if we're within influence range before computing sqrt
+            influence_radius_sq = obstacle.influence_radius * obstacle.influence_radius
+            if dist_sq > influence_radius_sq:
+                # outside influence range, skip this obstacle
+                continue
+
+            # now compute actual distance (only for points that might be affected)
+            dist = np.sqrt(dist_sq)
 
             # fuzzy transition zone between 85%-100% of radius
             # uses angular noise so the boundary isn't a perfect circle
@@ -369,20 +381,23 @@ class PointClusterer:
         if x < 0 or x > self.width or y < 0 or y > self.height:
             return False
 
-        # check obstacle collision (use tighter 85% radius)
+        # check obstacle collision using squared distance (avoids sqrt)
+        # uses tighter 85% radius
         for obstacle in self.obstacles:
             dx = x - obstacle.x
             dy = y - obstacle.y
-            dist = np.sqrt(dx**2 + dy**2)
-            if dist < obstacle.radius * 0.85:
+            dist_sq = dx * dx + dy * dy
+            inner_radius = obstacle.radius * 0.85
+            if dist_sq < inner_radius * inner_radius:
                 return False
 
-        # check minimum distance from existing points
+        # check minimum distance from existing points using squared distance
+        min_dist_sq = self.config.min_distance * self.config.min_distance
         for px, py in existing_points:
             dx = x - px
             dy = y - py
-            dist = np.sqrt(dx**2 + dy**2)
-            if dist < self.config.min_distance:
+            dist_sq = dx * dx + dy * dy
+            if dist_sq < min_dist_sq:
                 return False
 
         return True
