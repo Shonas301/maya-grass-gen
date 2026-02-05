@@ -52,9 +52,12 @@ global proc install() {
 
     fclose $fileId;
 
-    // --- install numpy via mayapy ---
+    // --- install dependencies via mayapy ---
     print "Installing numpy dependency...\n";
     int $numpyInstalled = installNumpy();
+
+    print "Installing scipy dependency (optional, for faster generation)...\n";
+    int $scipyInstalled = installScipy();
 
     // create shelf button directly (don't rely on userSetup.py)
     // get top shelf layout
@@ -112,6 +115,14 @@ global proc install() {
         print "    mayapy -m pip install --user numpy\n";
         print "\n";
     }
+    if ($scipyInstalled) {
+        print "scipy: installed successfully (faster generation enabled)\n";
+    } else {
+        print "scipy: FAILED to install automatically (optional).\n";
+        print "  For faster generation, run:\n";
+        print "    mayapy -m pip install --user scipy\n";
+        print "\n";
+    }
     print "opensimplex: bundled (no install needed)\n";
     print "\n";
     print "The 'Grass Generator' button has been added to the Custom shelf.\n";
@@ -151,6 +162,38 @@ global proc int installNumpy() {
         return 1;
     } else {
         warning "numpy installation could not be verified.";
+        return 0;
+    }
+}
+
+
+global proc int installScipy() {
+    // try to install scipy using mayapy
+    // returns 1 on success, 0 on failure
+    // scipy is optional but enables faster point generation via SDF density grid
+
+    string $mayapy = findMayapy();
+    if ($mayapy == "") {
+        warning "Could not locate mayapy. scipy must be installed manually.";
+        return 0;
+    }
+
+    print "Running: mayapy -m pip install --user scipy\n";
+    print "This may take a moment...\n";
+
+    // run pip install
+    string $cmd = "\"" + $mayapy + "\" -m pip install --user scipy";
+    int $result = `system($cmd)`;
+
+    // verify scipy is importable
+    string $verifyCmd = "\"" + $mayapy + "\" -c \"import scipy; print(scipy.__version__)\"";
+    string $version = `system($verifyCmd)`;
+
+    if ($version != "") {
+        print ("scipy " + $version + " installed successfully.\n");
+        return 1;
+    } else {
+        warning "scipy installation could not be verified.";
         return 0;
     }
 }

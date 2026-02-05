@@ -100,6 +100,38 @@ global proc int installNumpy() {
 }
 
 
+global proc int installScipy() {
+    // try to install scipy using mayapy
+    // returns 1 on success, 0 on failure
+    // scipy is optional but enables faster point generation via SDF density grid
+
+    string $mayapy = findMayapy();
+    if ($mayapy == "") {
+        warning "Could not locate mayapy. scipy must be installed manually.";
+        return 0;
+    }
+
+    print "Running: mayapy -m pip install --user scipy\n";
+    print "This may take a moment...\n";
+
+    // run pip install
+    string $cmd = "\"" + $mayapy + "\" -m pip install --user scipy";
+    int $result = `system($cmd)`;
+
+    // verify scipy is importable
+    string $verifyCmd = "\"" + $mayapy + "\" -c \"import scipy; print(scipy.__version__)\"";
+    string $version = `system($verifyCmd)`;
+
+    if ($version != "") {
+        print ("scipy " + $version + " installed successfully.\n");
+        return 1;
+    } else {
+        warning "scipy installation could not be verified.";
+        return 0;
+    }
+}
+
+
 global proc reinstallClean(string $modPath) {
     // phase 1: clean existing installation state
 
@@ -196,6 +228,15 @@ global proc reinstallInstall(string $modulePath, string $modFile) {
         print "[reinstall] numpy: OK\n";
     } else {
         print "[reinstall] numpy: FAILED - run manually: mayapy -m pip install --user numpy\n";
+    }
+
+    // install scipy (optional, for faster generation)
+    print "[reinstall] checking scipy dependency (optional)...\n";
+    int $scipyInstalled = installScipy();
+    if ($scipyInstalled) {
+        print "[reinstall] scipy: OK (faster generation enabled)\n";
+    } else {
+        print "[reinstall] scipy: FAILED (optional) - for faster generation: mayapy -m pip install --user scipy\n";
     }
 
     // add shelf button to Custom shelf

@@ -1,3 +1,4 @@
 numpy
 opensimplex>=0.4.5,<0.5
 pillow
+scipy  # optional: enables SDF density grid for ~8x faster point generation
