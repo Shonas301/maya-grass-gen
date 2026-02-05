@@ -22,8 +22,9 @@ except ImportError:
     SCIPY_AVAILABLE = False
 
 # threshold for using KD-tree vs linear scan
-# tree construction is O(n log n), only worthwhile for larger obstacle counts
-KDTREE_THRESHOLD = 10
+# benchmarking shows KD-tree overhead exceeds benefit until ~50+ obstacles
+# tree construction is O(n log n), queries are O(log n + k)
+KDTREE_THRESHOLD = 50
 
 # epsilon for floating point comparisons (distance from exact center)
 DISTANCE_EPSILON = 0.001

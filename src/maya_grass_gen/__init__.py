@@ -363,11 +363,12 @@ def generate_grass(
     generator.set_gravity_weight(gravity_weight)
 
     # detect obstacles from scene (exclude terrain and grass geometry)
+    phase_start = time.time()
     obstacle_count = generator.detect_scene_obstacles(
         exclude_objects=[terrain_mesh, grass_geometry],
     )
     if verbose:
-        print(f"detected {obstacle_count} scene obstacles")
+        print(f"[{time.time() - start_time:.2f}s] detected {obstacle_count} scene obstacles")
 
     # configure clustering with proximity density boost and new params
     generator.configure_clustering(
@@ -378,6 +379,7 @@ def generate_grass(
     )
 
     # generate grass points
+    phase_start = time.time()
     point_count = generator.generate_points(
         count=count,
         seed=seed,
@@ -385,7 +387,8 @@ def generate_grass(
         scale_variation_wave2=scale_variation_wave2,
     )
     if verbose:
-        print(f"generated {point_count} grass points")
+        print(f"[{time.time() - start_time:.2f}s] generated {point_count} grass points "
+              f"(took {time.time() - phase_start:.2f}s)")
 
     # create unique MASH network name if not provided
     if network_name is None:
@@ -393,6 +396,7 @@ def generate_grass(
 
     # create MASH network with mesh distribution
     # (scale is set per-point in the Python node from GrassPoint.scale values)
+    phase_start = time.time()
     generator.create_mash_network(
         grass_geometry,
         network_name,
@@ -400,10 +404,12 @@ def generate_grass(
         terrain_mesh=terrain_mesh,
     )
     if verbose:
-        print(f"created MASH network: {network_name}")
+        print(f"[{time.time() - start_time:.2f}s] created MASH network: {network_name} "
+              f"(took {time.time() - phase_start:.2f}s)")
 
     elapsed = time.time() - start_time
     if verbose:
-        print(f"grass generation complete in {elapsed:.2f}s")
+        print(f"[{elapsed:.2f}s] grass generation API complete")
+        print("NOTE: MASH may still be evaluating in Maya viewport")
 
     return network_name
