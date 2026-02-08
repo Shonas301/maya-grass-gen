@@ -963,6 +963,15 @@ class GrassGenerator:
 import math
 import openMASH
 
+# local bindings to avoid per-call attribute lookups in hot loops
+_sin = math.sin
+_cos = math.cos
+_sqrt = math.sqrt
+_atan2 = math.atan2
+_pi = math.pi
+_radians = math.radians
+_degrees = math.degrees
+
 md = openMASH.MASHData(thisNode)
 frame = md.getFrame()
 
@@ -993,10 +1002,10 @@ def is_inside_obstacle(x, z):
             return True
         # fuzzy zone between 85%-100% uses angular noise
         if dist_sq < obs["radius_sq"]:
-            angle = math.atan2(dz, dx)
-            noise = math.sin(angle * 7.0 + obs["x"] * 0.1) * 0.5 + 0.5
-            dist = math.sqrt(dist_sq)
-            inner_r = math.sqrt(obs["inner_radius_sq"])
+            angle = _atan2(dz, dx)
+            noise = _sin(angle * 7.0 + obs["x"] * 0.1) * 0.5 + 0.5
+            dist = _sqrt(dist_sq)
+            inner_r = _sqrt(obs["inner_radius_sq"])
             t = (dist - inner_r) / (obs["radius"] - inner_r)
             if t < noise * 0.6:
                 return True
@@ -1006,7 +1015,7 @@ def get_obstacle_deflection(x, z, obs):
     """calculate deflection from single obstacle."""
     dx = x - obs["x"]
     dz = z - obs["z"]
-    dist = math.sqrt(dx*dx + dz*dz)
+    dist = _sqrt(dx*dx + dz*dz)
 
     if dist < obs["radius"]:
         if dist < 0.001:
@@ -1031,12 +1040,12 @@ def get_obstacle_deflection(x, z, obs):
 def get_wind_vector(x, z, time):
     """calculate wind vector at position with obstacle avoidance."""
     angle = (
-        math.sin(x * noise_scale + time * time_scale)
-        * math.cos(z * noise_scale + time * time_scale)
-        * math.pi
+        _sin(x * noise_scale + time * time_scale)
+        * _cos(z * noise_scale + time * time_scale)
+        * _pi
     )
-    vx = math.cos(angle) * wind_strength
-    vz = math.sin(angle) * wind_strength
+    vx = _cos(angle) * wind_strength
+    vz = _sin(angle) * wind_strength
 
     for obs in obstacles:
         dx, dz = get_obstacle_deflection(x, z, obs)
@@ -1064,8 +1073,8 @@ for i in range(count):
 
     # calculate animated wind rotation
     vx, vz = get_wind_vector(x, z, frame)
-    wind_angle = math.atan2(vz, vx)
-    magnitude = math.sqrt(vx*vx + vz*vz)
+    wind_angle = _atan2(vz, vx)
+    magnitude = _sqrt(vx*vx + vz*vz)
     lean_amount = min({self._max_lean_angle}, magnitude * 10)
 
     # combine terrain tilt + wind lean
@@ -1073,12 +1082,12 @@ for i in range(count):
     # tilts in the correct direction on slopes instead of just adding to rx
     # which would push it into the terrain on the downhill side
     tilt_angle, tilt_dir = terrain_tilts[i]
-    tilt_dir_rad = math.radians(tilt_dir)
-    tilt_rx = tilt_angle * math.cos(tilt_dir_rad)
-    tilt_rz = tilt_angle * math.sin(tilt_dir_rad)
+    tilt_dir_rad = _radians(tilt_dir)
+    tilt_rx = tilt_angle * _cos(tilt_dir_rad)
+    tilt_rz = tilt_angle * _sin(tilt_dir_rad)
 
     rx = tilt_rx + lean_amount
-    ry = base_rotations[i] + math.degrees(wind_angle) * 0.3
+    ry = base_rotations[i] + _degrees(wind_angle) * 0.3
     rz = tilt_rz
     md.outRotation[i] = (rx, ry, rz)
 
@@ -1119,6 +1128,15 @@ md.setData()
 import math
 import openMASH
 
+# local bindings to avoid per-call attribute lookups in hot loops
+_sin = math.sin
+_cos = math.cos
+_sqrt = math.sqrt
+_atan2 = math.atan2
+_pi = math.pi
+_radians = math.radians
+_degrees = math.degrees
+
 # initialize MASH data
 md = openMASH.MASHData(thisNode)
 frame = md.getFrame()
@@ -1149,10 +1167,10 @@ def is_inside_obstacle(x, z):
             return True
         # fuzzy zone between 85%-100% uses angular noise
         if dist_sq < obs["radius_sq"]:
-            angle = math.atan2(dz, dx)
-            noise = math.sin(angle * 7.0 + obs["x"] * 0.1) * 0.5 + 0.5
-            dist = math.sqrt(dist_sq)
-            inner_r = math.sqrt(obs["inner_radius_sq"])
+            angle = _atan2(dz, dx)
+            noise = _sin(angle * 7.0 + obs["x"] * 0.1) * 0.5 + 0.5
+            dist = _sqrt(dist_sq)
+            inner_r = _sqrt(obs["inner_radius_sq"])
             t = (dist - inner_r) / (obs["radius"] - inner_r)
             if t < noise * 0.6:
                 return True
@@ -1161,7 +1179,7 @@ def is_inside_obstacle(x, z):
 def get_obstacle_deflection(x, z, obs):
     dx = x - obs["x"]
     dz = z - obs["z"]
-    dist = math.sqrt(dx*dx + dz*dz)
+    dist = _sqrt(dx*dx + dz*dz)
 
     if dist < obs["radius"]:
         if dist < 0.001:
@@ -1185,19 +1203,19 @@ def get_obstacle_deflection(x, z, obs):
 
 def get_wind_angle(x, z, time):
     angle = (
-        math.sin(x * noise_scale + time * time_scale)
-        * math.cos(z * noise_scale + time * time_scale)
-        * math.pi
+        _sin(x * noise_scale + time * time_scale)
+        * _cos(z * noise_scale + time * time_scale)
+        * _pi
     )
-    vx = math.cos(angle) * wind_strength
-    vz = math.sin(angle) * wind_strength
+    vx = _cos(angle) * wind_strength
+    vz = _sin(angle) * wind_strength
 
     for obs in obstacles:
         dx, dz = get_obstacle_deflection(x, z, obs)
         vx += dx
         vz += dz
 
-    return math.atan2(vz, vx)
+    return _atan2(vz, vx)
 
 # apply pre-computed positions, scales, and wind animation
 max_lean = {self._max_lean_angle}
@@ -1223,18 +1241,18 @@ for i in range(count):
 
     # apply wind animation
     angle = get_wind_angle(x, z, frame)
-    lean_amount = min(max_lean, 15 + 10 * abs(math.sin(angle)))
+    lean_amount = min(max_lean, 15 + 10 * abs(_sin(angle)))
 
     # combine terrain tilt + wind lean
     # decompose tilt into x/z euler components so blade tilts along slope
     # direction rather than pivoting into the terrain
     tilt_angle, tilt_dir = terrain_tilts[i]
-    tilt_dir_rad = math.radians(tilt_dir)
-    tilt_rx = tilt_angle * math.cos(tilt_dir_rad)
-    tilt_rz = tilt_angle * math.sin(tilt_dir_rad)
+    tilt_dir_rad = _radians(tilt_dir)
+    tilt_rx = tilt_angle * _cos(tilt_dir_rad)
+    tilt_rz = tilt_angle * _sin(tilt_dir_rad)
 
     rx = tilt_rx + lean_amount
-    ry = math.degrees(angle)
+    ry = _degrees(angle)
     rz = tilt_rz
     md.outRotation[i] = (rx, ry, rz)
 

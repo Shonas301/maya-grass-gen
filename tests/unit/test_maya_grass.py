@@ -707,7 +707,7 @@ class TestGrassGeneratorMeshDistribution:
         # then
         assert "md.outPosition[i] = positions[i]" in code
         assert "get_wind_vector" in code
-        assert "wind_angle = math.atan2" in code
+        assert "wind_angle = _atan2" in code
         assert "lean_amount" in code
         assert "obstacles" in code
 
@@ -1037,8 +1037,8 @@ class TestTerrainTilt:
         gen.generate_points(count=10, seed=42)
         gen._terrain_tilts = [(10.0, 90.0)] * 10
         code = gen._generate_wind_python_code()
-        assert "tilt_rx = tilt_angle * math.cos(tilt_dir_rad)" in code
-        assert "tilt_rz = tilt_angle * math.sin(tilt_dir_rad)" in code
+        assert "tilt_rx = tilt_angle * _cos(tilt_dir_rad)" in code
+        assert "tilt_rz = tilt_angle * _sin(tilt_dir_rad)" in code
         assert "rx = tilt_rx + lean_amount" in code
         assert "rz = tilt_rz" in code
         # should NOT have the old buggy pattern of adding tilt_dir to ry
@@ -1050,8 +1050,8 @@ class TestTerrainTilt:
         gen.generate_points(count=10, seed=42)
         gen._terrain_tilts = [(10.0, 90.0)] * 10
         code = gen._generate_point_based_wind_code()
-        assert "tilt_rx = tilt_angle * math.cos(tilt_dir_rad)" in code
-        assert "tilt_rz = tilt_angle * math.sin(tilt_dir_rad)" in code
+        assert "tilt_rx = tilt_angle * _cos(tilt_dir_rad)" in code
+        assert "tilt_rz = tilt_angle * _sin(tilt_dir_rad)" in code
 
     def test_tilt_decomposition_math_pure_x_slope(self) -> None:
         """test that a slope in the +x direction (dir=0) puts all tilt in rx.
