@@ -747,6 +747,12 @@ class GrassGenerator:
         # create MASH network
         import MASH.api as mapi
 
+        # ensure grass geometry vertices are centered at origin so MASH
+        # instances appear at the correct world positions. if the user moved
+        # the geo and froze transforms, the vertex data can be offset from
+        # origin which silently shifts every instance.
+        self._center_geometry_at_origin(grass_geometry)
+
         # select grass geometry before creating MASH network
         # MASH picks up the selected object as the geometry to instance
         cmds.select(grass_geometry, replace=True)
@@ -792,6 +798,33 @@ class GrassGenerator:
         if self.verbose:
             print("MASH network ready")
         return network_name
+
+    @staticmethod
+    def _center_geometry_at_origin(geometry: str) -> None:
+        """Move geometry vertices so the bounding box is centered at origin.
+
+        MASH instances are placed at world positions set by the Python node,
+        but the instanced geometry's vertex positions are baked into every
+        instance. if the vertices are offset from origin (e.g. the user moved
+        the geo and froze transforms without re-centering the verts), all
+        instances silently shift by that offset.
+
+        this is a no-op if the bbox center is already within 0.01 of origin.
+        """
+        bbox = cmds.exactWorldBoundingBox(geometry)
+        cx = (bbox[0] + bbox[3]) / 2.0
+        cy = (bbox[1] + bbox[4]) / 2.0
+        cz = (bbox[2] + bbox[5]) / 2.0
+
+        if abs(cx) < 0.01 and abs(cy) < 0.01 and abs(cz) < 0.01:
+            return
+
+        # move all vertices by the negative offset to center at origin
+        vtx = f"{geometry}.vtx[*]"
+        cmds.move(-cx, -cy, -cz, vtx, relative=True, worldSpace=True)
+
+        # reset pivot to origin
+        cmds.xform(geometry, worldSpace=True, pivots=[0, 0, 0])
 
     def _get_mash_node_name(self, node_wrapper: Any, node_type: str, network_name: str = "") -> str:
         """Resolve actual Maya node name from MASH node wrapper.
