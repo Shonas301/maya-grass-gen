@@ -1,4 +1,4 @@
-.PHONY: install install-dev lint typecheck test test-maya all clean release
+.PHONY: install install-dev lint lint-fix typecheck test test-maya all clean release
 
 # path to mayapy - override with: make test-maya MAYAPY=/path/to/mayapy
 MAYAPY ?= /System/Volumes/Data/Applications/Autodesk/maya2026/Maya.app/Contents/bin/mayapy
@@ -14,6 +14,9 @@ install-dev:
 
 lint:
 	ruff check .
+
+lint-fix:
+	ruff check --fix .
 
 typecheck:
 	mypy src

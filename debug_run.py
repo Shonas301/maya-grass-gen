@@ -15,12 +15,13 @@ if src_path not in sys.path:
 
 # reload to pick up diagnostic changes
 import importlib
+
 import maya_grass_gen
 
 importlib.reload(maya_grass_gen)
 
 # also reload submodules to ensure all diagnostics are active
-from maya_grass_gen import generator, terrain, flow_field
+from maya_grass_gen import flow_field, generator, terrain
 
 importlib.reload(terrain)
 importlib.reload(flow_field)

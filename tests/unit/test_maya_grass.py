@@ -18,11 +18,9 @@ from maya_grass_gen.wind import WindField
 
 def _maya_available() -> bool:
     """check if real maya is available."""
-    try:
-        import maya.standalone
-        return True
-    except ImportError:
-        return False
+    import importlib.util
+
+    return importlib.util.find_spec("maya.standalone") is not None
 
 
 class TestTerrainBounds:
@@ -943,7 +941,6 @@ class TestTerrainTilt:
     def test_tilt_math_flat_ground(self) -> None:
         """test the gravity blend math: flat ground (normal = up) gives zero tilt."""
         # simulate the math directly
-        import numpy as np
         nx, ny, nz = 0.0, 1.0, 0.0  # flat ground normal
         g = 0.75
         dx = (1 - g) * nx + 0.0
@@ -956,7 +953,6 @@ class TestTerrainTilt:
 
     def test_tilt_math_45_degree_slope(self) -> None:
         """test the gravity blend math: 45deg slope with g=0.75 gives ~11.25deg tilt."""
-        import numpy as np
         # normal for 45deg slope tilted in +X direction
         angle_rad = math.radians(45)
         nx = math.sin(angle_rad)  # ~0.707
@@ -967,9 +963,7 @@ class TestTerrainTilt:
         dy = (1 - g) * ny + g * 1.0
         dz = (1 - g) * nz
         length = math.sqrt(dx**2 + dy**2 + dz**2)
-        dx_hat = dx / length
         dy_hat = dy / length
-        dz_hat = dz / length
         tilt_angle = math.degrees(math.acos(max(-1.0, min(1.0, dy_hat))))
         # with g=0.75, expected tilt is roughly (1-0.75)*45 = 11.25 degrees
         assert 8.0 < tilt_angle < 15.0, f"expected ~11.25deg tilt, got {tilt_angle}"

@@ -4,13 +4,12 @@ from maya import cmds
 
 
 def find_mash_networks():
-    """find all MASH waiter nodes in the scene."""
-    waiters = cmds.ls(type="MASH_Waiter") or []
-    return waiters
+    """Find all MASH waiter nodes in the scene."""
+    return cmds.ls(type="MASH_Waiter") or []
 
 
 def get_transform_info(node):
-    """get world-space transform info for a node."""
+    """Get world-space transform info for a node."""
     # walk up to the transform parent if needed
     if cmds.nodeType(node) != "transform":
         parents = cmds.listRelatives(node, parent=True, fullPath=True) or []
@@ -23,18 +22,19 @@ def get_transform_info(node):
         translate = cmds.xform(node, q=True, worldSpace=True, translation=True)
         pivot = cmds.xform(node, q=True, worldSpace=True, rotatePivot=True)
         scale = cmds.xform(node, q=True, worldSpace=True, scale=True)
+    except Exception as e:
+        return {"node": node, "error": str(e)}
+    else:
         return {
             "node": node,
             "translate": translate,
             "pivot": pivot,
             "scale": scale,
         }
-    except Exception as e:
-        return {"node": node, "error": str(e)}
 
 
 def get_mash_python_positions(python_node):
-    """extract the embedded position list from a MASH python node's pyScript."""
+    """Extract the embedded position list from a MASH python node's pyScript."""
     try:
         code = cmds.getAttr(f"{python_node}.pyScript")
         if not code:
@@ -59,15 +59,14 @@ def get_mash_python_positions(python_node):
                             end = i + 1
                             break
                 expr = code[start:end].split("=", 1)[1].strip()
-                positions = ast.literal_eval(expr)
-                return positions
+                return ast.literal_eval(expr)
     except Exception as e:
         return f"error parsing: {e}"
     return None
 
 
-def diagnose():
-    """run full diagnostic. prints report to script editor."""
+def diagnose():  # noqa: C901, PLR0912
+    """Run full diagnostic. prints report to script editor."""
     print("\n" + "=" * 70)
     print("  GRASS PLACEMENT DIAGNOSTIC")
     print("=" * 70)
@@ -101,7 +100,7 @@ def diagnose():
         if info and "error" not in info:
             t = info["translate"]
             p = info["pivot"]
-            print(f"\n  [waiter transform]")
+            print("\n  [waiter transform]")
             print(f"    translate (world): ({t[0]:.4f}, {t[1]:.4f}, {t[2]:.4f})")
             print(f"    pivot (world):     ({p[0]:.4f}, {p[1]:.4f}, {p[2]:.4f})")
             offset_mag = (t[0]**2 + t[1]**2 + t[2]**2) ** 0.5
@@ -137,7 +136,7 @@ def diagnose():
                     offset_mag = (t[0]**2 + t[1]**2 + t[2]**2) ** 0.5
                     if offset_mag > 0.01:
                         print(f"    !! SOURCE GEO IS NOT AT ORIGIN (offset={offset_mag:.2f})")
-                        print(f"    !! this may shift all instances")
+                        print("    !! this may shift all instances")
 
         # find MASH_Python node for this network
         python_nodes = cmds.ls(f"{waiter}*", type="MASH_Python") or []
@@ -160,7 +159,7 @@ def diagnose():
                 print(f"    z range: [{min(zs):.2f}, {max(zs):.2f}]")
                 print(f"    centroid: ({sum(xs)/len(xs):.2f}, {sum(ys)/len(ys):.2f}, {sum(zs)/len(zs):.2f})")
             else:
-                print(f"    no positions found in pyScript")
+                print("    no positions found in pyScript")
 
         # find the distribute node
         dist_nodes = cmds.ls(f"{waiter}*", type="MASH_Distribute") or []
@@ -174,7 +173,7 @@ def diagnose():
 
     # 3. check all mesh transforms that might be terrain
     print(f"\n{'─' * 60}")
-    print(f"  MESH TRANSFORMS (potential terrain)")
+    print("  MESH TRANSFORMS (potential terrain)")
     print(f"{'─' * 60}")
 
     for mesh_t in sorted(mesh_transforms):

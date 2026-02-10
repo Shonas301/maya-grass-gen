@@ -272,7 +272,7 @@ class GrassGenerator:
             return
 
         try:
-            import maya.api.OpenMaya as om2
+            import maya.api.OpenMaya as om2  # noqa: N813
 
             # get the terrain mesh's dag path
             sel = om2.MSelectionList()
@@ -313,7 +313,7 @@ class GrassGenerator:
                         ray_source, ray_dir,
                         om2.MSpace.kWorld,
                         ray_y + abs(self.terrain.bounds.min_y if self.terrain.bounds else 0) + 200.0,
-                        False,
+                        False,  # noqa: FBT003
                         accelParams=accel_params,
                     )
                 )
@@ -758,7 +758,7 @@ class GrassGenerator:
         cmds.select(grass_geometry, replace=True)
 
         mash_network = mapi.Network()
-        mash_network.createNetwork(name=network_name, geometry='Repro')
+        mash_network.createNetwork(name=network_name, geometry="Repro")
 
         if distribute_on_mesh:
             # use mesh surface distribution
@@ -847,13 +847,13 @@ class GrassGenerator:
         cmds.refresh(force=True)
 
         # the wrapper's .name property contains the correct node name
-        if hasattr(node_wrapper, 'name'):
+        if hasattr(node_wrapper, "name"):
             name = node_wrapper.name
             if name and cmds.objExists(name):
                 return name
 
         # fallback: try getNodeName() method
-        if hasattr(node_wrapper, 'getNodeName'):
+        if hasattr(node_wrapper, "getNodeName"):
             name = node_wrapper.getNodeName()
             if name and cmds.objExists(name):
                 return name
@@ -945,10 +945,12 @@ class GrassGenerator:
 
             # verify python node exists and has pyScript attr
             if not cmds.objExists(python_node_name):
-                raise RuntimeError(f"python node {python_node_name} does not exist")
+                msg = f"python node {python_node_name} does not exist"
+                raise RuntimeError(msg)  # noqa: TRY301
             attrs = cmds.listAttr(python_node_name) or []
             if "pyScript" not in attrs:
-                raise RuntimeError(f"python node {python_node_name} missing pyScript attr")
+                msg = f"python node {python_node_name} missing pyScript attr"
+                raise RuntimeError(msg)  # noqa: TRY301
 
             # generate wind expression that updates with time
             wind_code = self._generate_wind_python_code()

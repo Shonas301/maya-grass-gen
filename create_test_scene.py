@@ -4,7 +4,8 @@ run this in maya's script editor or via mayapy.
 """
 
 import random
-import maya.cmds as cmds
+
+from maya import cmds
 
 # try to use project's noise utils, fall back to simple random if not available
 try:
@@ -14,7 +15,7 @@ except ImportError:
     HAS_NOISE = False
 
 
-def create_test_scene(
+def create_test_scene(  # noqa: PLR0913
     terrain_size=100.0,
     terrain_subdivisions=30,
     terrain_height=8.0,
@@ -23,9 +24,9 @@ def create_test_scene(
     column_height=15.0,
     seed=42,
 ):
-    """create a test scene with undulating terrain and cylinder obstacles.
+    """Create a test scene with undulating terrain and cylinder obstacles.
 
-    args:
+    Args:
         terrain_size: width/depth of terrain plane
         terrain_subdivisions: number of subdivisions per axis
         terrain_height: max height variation of terrain
@@ -106,8 +107,8 @@ def create_test_scene(
 
     for i in range(num_columns):
         # random position on terrain
-        col_x = random.uniform(-half_size, half_size)
-        col_z = random.uniform(-half_size, half_size)
+        col_x = random.uniform(-half_size, half_size)  # noqa: S311
+        col_z = random.uniform(-half_size, half_size)  # noqa: S311
 
         # sample terrain height at this position
         if HAS_NOISE:
@@ -143,13 +144,13 @@ def create_test_scene(
     cmds.viewFit()
     cmds.select(clear=True)
 
-    print(f"created test scene:")
+    print("created test scene:")
     print(f"  - terrain: '{terrain}' ({terrain_size}x{terrain_size}, {terrain_subdivisions}x{terrain_subdivisions} subdivs)")
     print(f"  - grass blade: '{grass_blade}' (hidden)")
     print(f"  - columns: {len(columns)} obstacles")
-    print(f"\nto generate grass, run:")
-    print(f"  from maya_grass_gen import generate_grass")
-    print(f"  generate_grass(terrain_mesh='terrain', grass_geometry='grassBlade')")
+    print("\nto generate grass, run:")
+    print("  from maya_grass_gen import generate_grass")
+    print("  generate_grass(terrain_mesh='terrain', grass_geometry='grassBlade')")
 
     return terrain, grass_blade, columns
 

@@ -162,11 +162,9 @@ class TestModuleExports:
 
 def _maya_available() -> bool:
     """check if real maya is available (not mocked)."""
-    try:
-        import maya.standalone
-        return True
-    except ImportError:
-        return False
+    import importlib.util
+
+    return importlib.util.find_spec("maya.standalone") is not None
 
 
 @pytest.mark.skipif(_maya_available(), reason="test uses mocks, skip when real maya available")

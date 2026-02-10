@@ -17,18 +17,17 @@ this script queries the actual terrain mesh in the scene and reports:
 
 from __future__ import annotations
 
-import math
 import json
 from pathlib import Path
 
 
 def diagnose_mesh_height_range(mesh_name: str) -> dict:
-    """query a mesh's full Y (height) range using bounding box.
+    """Query a mesh's full Y (height) range using bounding box.
 
-    args:
+    Args:
         mesh_name: name of maya mesh transform
 
-    returns:
+    Returns:
         dict with min_y, max_y, height_range
     """
     from maya import cmds
@@ -50,7 +49,7 @@ def diagnose_mesh_height_range(mesh_name: str) -> dict:
     print(f"bounding box Y: [{bbox[1]:.4f}, {bbox[4]:.4f}]")
     print(f"height range: {result['height_range']:.4f}")
     print(f"is flat: {result['is_flat']}")
-    if result['is_flat']:
+    if result["is_flat"]:
         print("WARNING: mesh appears flat (no height variation)")
         print("  grass height sampling won't produce varied Y values on a flat mesh")
 
@@ -61,17 +60,17 @@ def diagnose_surface_height_sampling(
     mesh_name: str,
     num_samples: int = 20,
 ) -> dict:
-    """sample height at grid positions using both ray-cast and closest-point.
+    """Sample height at grid positions using both ray-cast and closest-point.
 
     compares two approaches at evenly spaced XZ positions:
     1. ray-cast: downward ray from above terrain (correct for hills)
     2. closest-point: getClosestPointAndNormal from y=0 (fails on hills)
 
-    args:
+    Args:
         mesh_name: terrain mesh name
         num_samples: number of samples per axis (total = num_samples^2)
 
-    returns:
+    Returns:
         dict with height samples and statistics
     """
     import maya.api.OpenMaya as om2
@@ -159,33 +158,33 @@ def diagnose_surface_height_sampling(
     }
 
     print(f"\n=== surface height sampling: {mesh_name} ({num_samples*num_samples} samples) ===")
-    print(f"\n  [ray-cast (correct)]")
+    print("\n  [ray-cast (correct)]")
     print(f"    hits: {len(raycast_heights)}/{num_samples*num_samples}")
     print(f"    height range: [{rc_min:.4f}, {rc_max:.4f}], span={rc_max-rc_min:.4f}")
     print(f"    mean: {rc_mean:.4f}")
-    print(f"\n  [closest-point (old/fallback)]")
+    print("\n  [closest-point (old/fallback)]")
     print(f"    height range: [{cl_min:.4f}, {cl_max:.4f}], span={cl_max-cl_min:.4f}")
     print(f"    mean: {cl_mean:.4f}")
-    print(f"\n  [comparison]")
+    print("\n  [comparison]")
     print(f"    mismatches (>0.1 unit difference): {mismatches}/{len(samples)} "
           f"({result['mismatch_rate']:.1%})")
 
     if mismatches > 0:
         print(f"    WARNING: closest-point returned wrong height at {mismatches} positions!")
-        print(f"    these positions would have flat grass instead of following terrain")
-        mismatch_samples = [s for s in samples if s['mismatch']][:5]
+        print("    these positions would have flat grass instead of following terrain")
+        mismatch_samples = [s for s in samples if s["mismatch"]][:5]
         for s in mismatch_samples:
             print(f"      x={s['x']:.1f}, z={s['z']:.1f}: "
                   f"raycast_y={s['raycast_y']:.3f}, closest_y={s['closest_y']:.3f}, "
                   f"diff={abs(s['raycast_y'] - s['closest_y']):.3f}")
 
-    if result['is_flat']:
+    if result["is_flat"]:
         print("\n  WARNING: surface appears flat across all samples")
 
-    print(f"\n  sample grid (first 10):")
+    print("\n  sample grid (first 10):")
     for s in samples[:10]:
-        rc = f"{s['raycast_y']:.4f}" if s['raycast_y'] is not None else "MISS"
-        flag = " MISMATCH" if s['mismatch'] else ""
+        rc = f"{s['raycast_y']:.4f}" if s["raycast_y"] is not None else "MISS"
+        flag = " MISMATCH" if s["mismatch"] else ""
         print(f"    x={s['x']:8.2f}, z={s['z']:8.2f} -> "
               f"raycast={rc}, closest={s['closest_y']:.4f}{flag}")
 
@@ -197,21 +196,22 @@ def diagnose_grass_point_heights(
     grass_geometry: str,
     count: int = 100,
 ) -> dict:
-    """generate grass points and diagnose their height values.
+    """Generate grass points and diagnose their height values.
 
     runs the full grass generation pipeline and checks whether
     heights are being correctly snapped to the terrain surface.
 
-    args:
+    Args:
         terrain_mesh: name of terrain mesh
         grass_geometry: name of grass blade geometry
         count: number of test points
 
-    returns:
+    Returns:
         dict with per-point height diagnostics
     """
     import maya.api.OpenMaya as om2
     from maya import cmds
+
     from maya_grass_gen.generator import GrassGenerator
     from maya_grass_gen.terrain import TerrainAnalyzer
 
@@ -288,7 +288,7 @@ def diagnose_grass_point_heights(
         "sample_points": verification[:10],
     }
 
-    print(f"\n=== grass point height diagnostics ===")
+    print("\n=== grass point height diagnostics ===")
     print(f"terrain: {terrain_mesh}")
     print(f"points: {result['point_count']}")
     print(f"pre-snap heights all zero: {pre_all_zero}")
@@ -307,7 +307,7 @@ def diagnose_grass_point_heights(
         print("  - ray-cast not hitting mesh surface")
         print("  - maya API returning incorrect results")
 
-    print(f"\nsample points (first 10):")
+    print("\nsample points (first 10):")
     print(f"  {'idx':>4} {'x':>8} {'z':>8} {'pre_y':>10} {'post_y':>10} {'expected':>10} {'error':>8} {'method'}")
     for v in verification[:10]:
         print(f"  {v['index']:4d} {v['x']:8.2f} {v['z']:8.2f} "
@@ -321,13 +321,13 @@ def export_height_report(
     terrain_mesh: str,
     output_path: str | None = None,
 ) -> str:
-    """export full height diagnostic report to JSON.
+    """Export full height diagnostic report to JSON.
 
-    args:
+    Args:
         terrain_mesh: terrain mesh name
         output_path: where to write JSON (defaults to temp location)
 
-    returns:
+    Returns:
         path to output file
     """
     if output_path is None:
@@ -346,7 +346,7 @@ def export_height_report(
 
 
 def run_quick_diagnosis(terrain_mesh: str = "pPlane1"):
-    """run quick height diagnosis on a terrain mesh.
+    """Run quick height diagnosis on a terrain mesh.
 
     call this from maya's script editor:
         exec(open('scripts/diagnose_terrain_height.py').read())

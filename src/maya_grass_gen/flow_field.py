@@ -15,8 +15,8 @@ from maya_grass_gen.noise_utils import fbm_noise3
 
 # optional scipy import for KD-tree spatial indexing and distance transforms
 try:
-    from scipy.spatial import KDTree
     from scipy.ndimage import distance_transform_edt
+    from scipy.spatial import KDTree
     SCIPY_AVAILABLE = True
 except ImportError:
     KDTree = None  # type: ignore[misc, assignment]
@@ -380,13 +380,12 @@ class PointClusterer:
         if cache["centers"].shape[0] == 0:
             return np.zeros(len(points), dtype=bool)
 
-        # broadcast: points (n, 1, 2) - centers (m, 2) = (n, m, 2)
+        # points (n, 1, 2) - centers (m, 2) = (n, m, 2)
         diff = points[:, np.newaxis, :] - cache["centers"]
         # squared distances: (n, m)
         dist_sq = np.sum(diff * diff, axis=2)
         # check if inside any obstacle (using 85% inner radius)
-        inside = np.any(dist_sq < cache["inner_radii_sq"], axis=1)
-        return inside
+        return np.any(dist_sq < cache["inner_radii_sq"], axis=1)
 
     def _get_nearby_obstacle_indices(self, x: float, y: float) -> list[int]:
         """Get indices of obstacles that might affect this point.
@@ -409,8 +408,7 @@ class PointClusterer:
         if kdtree is not None:
             # use KD-tree to find obstacles within max influence radius
             # this reduces O(m) to O(log m + k) where k is nearby count
-            nearby = kdtree.query_ball_point([x, y], cache["max_influence_radius"])
-            return nearby
+            return kdtree.query_ball_point([x, y], cache["max_influence_radius"])
 
         # fallback: return all obstacle indices for linear scan
         return list(range(len(self.obstacles)))
@@ -463,9 +461,6 @@ class PointClusterer:
         # compute distance transform (distance from each non-obstacle pixel to nearest obstacle)
         # invert mask: we want distance FROM obstacles, not TO obstacles
         distance_from_obstacle = distance_transform_edt(~obstacle_mask) * scale_x
-
-        # also compute distance INTO obstacles (for points inside)
-        distance_into_obstacle = distance_transform_edt(obstacle_mask) * scale_x
 
         # initialize density grid
         density_grid = np.ones((grid_height, grid_width), dtype=np.float32)

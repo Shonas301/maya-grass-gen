@@ -23,7 +23,7 @@ import numpy as np
 
 class MockNoiseModule:
     @staticmethod
-    def fbm_noise3(x, y, z, octaves=1, persistence=0.5, lacunarity=2.0):
+    def fbm_noise3(x, y, z, _octaves=1, _persistence=0.5, _lacunarity=2.0):
         # simple deterministic noise approximation for benchmarking
         return np.sin(x * 0.1) * np.cos(y * 0.1) * np.sin(z * 0.1)
 
@@ -33,17 +33,18 @@ flow_field_path = src_path / "maya_grass_gen" / "flow_field.py"
 noise_utils_path = src_path / "maya_grass_gen" / "noise_utils.py"
 
 # first load noise_utils
-import importlib.util
+import importlib.util  # noqa: E402
+
 noise_spec = importlib.util.spec_from_file_location("noise_utils", noise_utils_path)
 noise_utils = importlib.util.module_from_spec(noise_spec)
-sys.modules['maya_grass_gen'] = type(sys)('maya_grass_gen')
-sys.modules['maya_grass_gen.noise_utils'] = noise_utils
+sys.modules["maya_grass_gen"] = type(sys)("maya_grass_gen")
+sys.modules["maya_grass_gen.noise_utils"] = noise_utils
 noise_spec.loader.exec_module(noise_utils)
 
 # now load flow_field
 flow_spec = importlib.util.spec_from_file_location("flow_field", flow_field_path)
 flow_field = importlib.util.module_from_spec(flow_spec)
-sys.modules['maya_grass_gen.flow_field'] = flow_field
+sys.modules["maya_grass_gen.flow_field"] = flow_field
 flow_spec.loader.exec_module(flow_field)
 
 PointClusterer = flow_field.PointClusterer
@@ -93,7 +94,7 @@ class Timer:
         self.name = name
         self.duration: float = 0.0
 
-    def __enter__(self) -> "Timer":
+    def __enter__(self) -> Timer:
         self.start_time = time.perf_counter()
         return self
 

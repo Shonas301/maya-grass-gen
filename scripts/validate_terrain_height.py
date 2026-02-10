@@ -31,12 +31,12 @@ def validate_height_not_static(
     depth: float = 1000,
     num_points: int = 100,
 ) -> dict:
-    """validate that generate_points creates y=0 by default (pre-snap).
+    """Validate that generate_points creates y=0 by default (pre-snap).
 
     this confirms the baseline: before _compute_terrain_tilts is called,
     all points have y=0.0. after snapping, they should differ on non-flat terrain.
 
-    returns:
+    Returns:
         dict with validation results
     """
     from maya_grass_gen.generator import GrassGenerator
@@ -64,7 +64,7 @@ def validate_height_not_static(
 
 
 def validate_height_snapping_math() -> dict:
-    """validate the height snapping math using simulated mesh queries.
+    """Validate the height snapping math using simulated mesh queries.
 
     simulates what _compute_terrain_tilts does: for each point, find the
     closest point on a virtual mesh surface and use its Y as the grass height.
@@ -72,10 +72,10 @@ def validate_height_snapping_math() -> dict:
     uses a simple sine-wave terrain: y = amplitude * sin(x * freq) * sin(z * freq)
     to verify grass follows terrain contours.
 
-    returns:
+    Returns:
         dict with validation results
     """
-    from maya_grass_gen.generator import GrassGenerator, GrassPoint
+    from maya_grass_gen.generator import GrassGenerator
 
     # create generator with points spread across terrain
     gen = GrassGenerator.from_bounds(0, 100, 0, 100)
@@ -142,7 +142,7 @@ def validate_height_snapping_math() -> dict:
     print(f"non-zero Y in MASH python code: {result['non_zero_y_in_mash_code']}")
 
     # show per-point height sample
-    print(f"\nsample heights (first 10 points):")
+    print("\nsample heights (first 10 points):")
     for i, p in enumerate(gen._grass_points[:10]):
         expected_y = terrain_height(p.x, p.z)
         match = abs(p.y - expected_y) < 0.001
@@ -159,12 +159,12 @@ def validate_height_distribution_stats(
     num_points: int = 200,
     num_bins: int = 10,
 ) -> dict:
-    """validate height distribution statistics for diagnostic purposes.
+    """Validate height distribution statistics for diagnostic purposes.
 
     creates points and simulates height snapping on a hilly terrain,
     then bins the heights and reports the distribution.
 
-    returns:
+    Returns:
         dict with distribution statistics
     """
     from maya_grass_gen.generator import GrassGenerator
@@ -213,7 +213,7 @@ def validate_height_distribution_stats(
     print(f"height span: {result['height_range_total']:.3f}")
     print(f"height mean: {result['height_mean']:.3f}")
     print(f"height std: {result['height_std']:.3f}")
-    print(f"\nheight histogram:")
+    print("\nheight histogram:")
     max_bin = max(bins) if bins else 1
     for i, count in enumerate(bins):
         low = min_h + i * bin_width
@@ -226,13 +226,13 @@ def validate_height_distribution_stats(
 
 
 def validate_mash_code_positions_have_height() -> dict:
-    """validate that both MASH code paths embed height data in positions.
+    """Validate that both MASH code paths embed height data in positions.
 
     checks that _generate_wind_python_code and _generate_point_based_wind_code
     both produce code where positions[i] contains non-zero Y values
     after height snapping.
 
-    returns:
+    Returns:
         dict with validation results
     """
     from maya_grass_gen.generator import GrassGenerator
@@ -241,7 +241,7 @@ def validate_mash_code_positions_have_height() -> dict:
     gen.generate_points(count=20, seed=42)
 
     # simulate height snapping
-    for i, point in enumerate(gen._grass_points):
+    for _i, point in enumerate(gen._grass_points):
         point.y = 5.0 * math.sin(point.x * 0.1) + 3.0 * math.cos(point.z * 0.15)
 
     # need terrain tilts for code generation
@@ -284,7 +284,7 @@ def validate_mash_code_positions_have_height() -> dict:
 
 
 def run_all_height_validations() -> bool:
-    """run all height-related validation checks."""
+    """Run all height-related validation checks."""
     print("=" * 60)
     print("terrain height validation suite")
     print("=" * 60)

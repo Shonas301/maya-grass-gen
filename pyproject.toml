@@ -60,6 +60,7 @@ exclude = [
     ".git",
     "docs",
     ".mypy_cache",
+    "maya_grass_plugin/vendor",
 ]
 
 line-length = 88
@@ -112,18 +113,33 @@ ignore = ["E501", "S101", "EM101", "TRY003", "EXE002"]
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["D", "INP001"]
+"tests/*" = ["D", "INP001", "PLR2004", "S101", "ARG001", "ARG002", "BLE001", "FBT", "N806"]
+"scripts/*" = ["D", "INP001", "T201", "PLR2004", "BLE001", "S101", "S110", "ERA001", "FBT", "PLR0913", "PLR0915", "ARG001", "N806", "N813", "PTH123"]
 "src/maya_grass_gen/*.py" = [
     "C901",      # terrain blob detection is inherently complex
     "PLR0913",   # methods need many config params
+    "PLR2004",   # magic values in math-heavy code
     "FBT001",    # boolean config options
     "FBT002",    # boolean default values for config
     "ARG002",    # some args reserved for maya-specific implementation
+    "ARG005",    # unused lambda args for maya callbacks
     "PLC0415",   # conditional imports for maya/non-maya environments
     "T201",      # print statements for user feedback
     "PLR0912",   # complex algorithms
     "PLR0915",   # complex algorithms
+    "BLE001",    # maya api calls need broad except
 ]
+"maya_grass_plugin/scripts/*.py" = [
+    "T201", "INP001", "E402", "F401", "BLE001", "S110",
+]
+"maya_grass_plugin/scripts/maya_grass_gen/*.py" = [
+    "C901", "PLR0913", "PLR2004", "FBT001", "FBT002", "ARG002", "ARG005",
+    "PLC0415", "T201", "PLR0912", "PLR0915", "BLE001",
+]
+# root-level dev/debug scripts
+"debug_run.py" = ["D", "INP001", "T201", "E402", "F401", "BLE001", "PLW0603"]
+"reload.py" = ["D", "INP001", "T201", "E402", "F401"]
+"create_test_scene.py" = ["D", "INP001", "T201", "E402", "FBT", "PLR2004", "ARG001"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["maya_grass_gen"]

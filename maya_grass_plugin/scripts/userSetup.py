@@ -6,21 +6,20 @@ to the grass generator ui and checks that required dependencies are available.
 the button is added to a 'Custom' shelf. if the shelf doesn't exist, it is created.
 """
 
-import maya.cmds as cmds
-import maya.mel as mel
+from maya import cmds, mel
 
 
 def check_dependencies():
-    """check that required python dependencies are available."""
+    """Check that required python dependencies are available."""
     missing = []
 
     try:
-        import numpy  # noqa: F401
+        import numpy  # noqa: ICN001
     except ImportError:
         missing.append("numpy")
 
     try:
-        import opensimplex  # noqa: F401
+        import opensimplex
     except ImportError:
         missing.append("opensimplex")
 
@@ -47,7 +46,7 @@ def check_dependencies():
 
 
 def add_grass_shelf_button():
-    """add grass generator button to shelf."""
+    """Add grass generator button to shelf."""
     # get top shelf layout
     top_shelf = mel.eval("$tmpVar=$gShelfTopLevel")
 
@@ -81,7 +80,7 @@ def add_grass_shelf_button():
 
 
 def startup():
-    """run all startup tasks."""
+    """Run all startup tasks."""
     add_grass_shelf_button()
     check_dependencies()
 

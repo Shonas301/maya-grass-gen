@@ -1,9 +1,10 @@
 # It all started with this gist, once upon a time:
 # https://gist.github.com/KdotJPG/b1270127455a94ac5d19
 
-from .constants import *
-from math import floor
 from ctypes import c_int64
+from math import floor
+
+from .constants import *
 
 try:
     from numba import njit, prange

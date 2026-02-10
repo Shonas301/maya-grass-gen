@@ -35,13 +35,13 @@ def validate_density_gradient(
     obstacle_radius: float = 80,
     num_bins: int = 10,
 ) -> dict:
-    """validate that point density near obstacles forms a smooth gradient.
+    """Validate that point density near obstacles forms a smooth gradient.
 
     creates a point clusterer with one obstacle and checks that density
     increases smoothly toward the obstacle edge rather than forming a
     hard ring at a fixed distance.
 
-    returns:
+    Returns:
         dict with validation results and diagnostics
     """
     from maya_grass_gen.flow_field import ClusteringConfig, Obstacle, PointClusterer
@@ -127,7 +127,7 @@ def validate_density_gradient(
     print(f"ring artifact detected: {result['ring_detected']}")
     print(f"gradient coverage: {result['gradient_coverage']:.1%}")
     print(f"peak density bin: {result['peak_bin']} (distance {result['peak_bin'] * bin_width:.1f}-{(result['peak_bin']+1) * bin_width:.1f})")
-    print(f"density by distance bin:")
+    print("density by distance bin:")
     for i, d in enumerate(density_values):
         inner = i * bin_width
         outer = (i + 1) * bin_width
@@ -146,14 +146,14 @@ def validate_scale_distribution(
     scale_min: float = 0.8,
     scale_max: float = 1.2,
 ) -> dict:
-    """validate that per-point scale values are distributed correctly.
+    """Validate that per-point scale values are distributed correctly.
 
     creates a grass generator, generates points, and checks that:
     1. all scales are within the expected range
     2. scales show uniform distribution (not clustered)
     3. the python node code embeds scale data
 
-    returns:
+    Returns:
         dict with validation results
     """
     from maya_grass_gen.generator import GrassGenerator
@@ -222,18 +222,17 @@ def validate_obstacle_visibility(
     obstacle_z: float = 500,
     obstacle_radius: float = 80,
 ) -> dict:
-    """validate that the python node code hides instances inside obstacles.
+    """Validate that the python node code hides instances inside obstacles.
 
     checks that:
     1. is_inside_obstacle() function exists in generated code
     2. outVisibility is used (not outScale zeroing)
     3. the obstacle data includes radius_sq for performance
 
-    returns:
+    Returns:
         dict with validation results
     """
     from maya_grass_gen.generator import GrassGenerator
-    from maya_grass_gen.terrain import DetectedObstacle
 
     gen = GrassGenerator.from_bounds(0, width, 0, height)
     gen.terrain.add_obstacle_manual(obstacle_x, obstacle_z, obstacle_radius)
@@ -278,7 +277,7 @@ def validate_obstacle_visibility(
 
 
 def run_all_validations() -> bool:
-    """run all validation checks and return overall pass/fail."""
+    """Run all validation checks and return overall pass/fail."""
     print("=" * 60)
     print("grass generation validation suite")
     print("=" * 60)

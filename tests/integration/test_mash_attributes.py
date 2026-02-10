@@ -12,16 +12,15 @@ or via make:
 
 from __future__ import annotations
 
-import ast
 import re
 from pathlib import Path
 
 import pytest
 
 # skip entire module if maya not available
-maya = pytest.importorskip("maya")
+pytest.importorskip("maya")
 
-import maya.standalone  # noqa: E402
+import maya.standalone
 
 # initialize maya standalone (once per session)
 _maya_initialized = False
@@ -29,7 +28,7 @@ _maya_initialized = False
 
 def ensure_maya_initialized():
     """initialize maya standalone if not already done."""
-    global _maya_initialized
+    global _maya_initialized  # noqa: PLW0603
     if not _maya_initialized:
         maya.standalone.initialize()
         _maya_initialized = True
@@ -39,7 +38,6 @@ def ensure_maya_initialized():
 def maya_session():
     """ensure maya is initialized for the test module."""
     ensure_maya_initialized()
-    yield
     # don't uninitialize - causes issues with multiple test runs
 
 
@@ -72,10 +70,10 @@ def get_mash_node_attributes(node_type: str) -> set[str]:
     returns:
         set of attribute names
     """
-    from maya import cmds
     import MASH.api as mapi
+    from maya import cmds
 
-    global _attr_test_counter
+    global _attr_test_counter  # noqa: PLW0603
     _attr_test_counter += 1
     network_name = f"attr_test_{_attr_test_counter}"
 
@@ -93,8 +91,7 @@ def get_mash_node_attributes(node_type: str) -> set[str]:
         node_name = node.name
 
         # get all attributes
-        attrs = set(cmds.listAttr(node_name) or [])
-        return attrs
+        return set(cmds.listAttr(node_name) or [])
     finally:
         # cleanup - find and delete the waiter node and test geometry
         waiters = cmds.ls(f"{network_name}*", type="MASH_Waiter") or []
@@ -115,25 +112,24 @@ def extract_setattr_calls(filepath: Path) -> list[tuple[str, str, int]]:
     content = filepath.read_text()
     results = []
 
-    # pattern for cmds.setAttr(f"{var}.attr", ...)
-    # matches: cmds.setAttr(f"{random_name}.uniformRandom", True)
+    # match setAttr calls that use an f-string with a variable and dot-attribute
     pattern = r'cmds\.setAttr\(f["\']{\w+}\.(\w+)["\']'
 
-    for i, line in enumerate(content.split('\n'), 1):
+    for i, line in enumerate(content.split("\n"), 1):
         match = re.search(pattern, line)
         if match:
             attr_name = match.group(1)
             # try to determine node type from variable name
-            if 'random_name' in line.lower():
-                node_type = 'MASH_Random'
-            elif 'offset_name' in line.lower():
-                node_type = 'MASH_Offset'
-            elif 'python' in line.lower():
-                node_type = 'MASH_Python'
-            elif 'distribute' in line.lower():
-                node_type = 'MASH_Distribute'
+            if "random_name" in line.lower():
+                node_type = "MASH_Random"
+            elif "offset_name" in line.lower():
+                node_type = "MASH_Offset"
+            elif "python" in line.lower():
+                node_type = "MASH_Python"
+            elif "distribute" in line.lower():
+                node_type = "MASH_Distribute"
             else:
-                node_type = 'unknown'
+                node_type = "unknown"
             results.append((node_type, attr_name, i))
 
     return results
@@ -188,7 +184,7 @@ class TestMASHAttributeValidation:
 
         errors = []
         for node_type, attr_name, line_num in setattr_calls:
-            if node_type == 'unknown':
+            if node_type == "unknown":
                 continue  # skip if we can't determine node type
 
             if node_type not in valid_attrs_cache:
@@ -214,8 +210,8 @@ class TestMASHNodeCreation:
 
     def test_can_create_mash_network(self, test_geometry):
         """verify we can create a basic MASH network."""
-        from maya import cmds
         import MASH.api as mapi
+        from maya import cmds
 
         # test_geometry fixture already creates and selects a cube
         network = mapi.Network()
@@ -233,8 +229,8 @@ class TestMASHNodeCreation:
 
     def test_can_add_random_node(self, test_geometry):
         """verify we can add and configure a MASH_Random node."""
-        from maya import cmds
         import MASH.api as mapi
+        from maya import cmds
 
         # test_geometry fixture already creates and selects a cube
         network = mapi.Network()
@@ -252,7 +248,7 @@ class TestMASHNodeCreation:
             cmds.setAttr(f"{node_name}.uniformRandom", True)
             cmds.setAttr(f"{node_name}.scaleX", 0.5)
 
-            assert cmds.getAttr(f"{node_name}.uniformRandom") == True
+            assert cmds.getAttr(f"{node_name}.uniformRandom") is True
             assert cmds.getAttr(f"{node_name}.scaleX") == 0.5
         finally:
             # cleanup
@@ -262,8 +258,8 @@ class TestMASHNodeCreation:
 
     def test_can_add_offset_node(self, test_geometry):
         """verify we can add and configure a MASH_Offset node."""
-        from maya import cmds
         import MASH.api as mapi
+        from maya import cmds
 
         # test_geometry fixture already creates and selects a cube
         network = mapi.Network()

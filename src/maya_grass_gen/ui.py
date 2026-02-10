@@ -9,8 +9,8 @@ Usage:
 """
 
 import functools
-from maya import cmds
 
+from maya import cmds
 
 # window constants
 WINDOW_NAME = "grassGeneratorUI"
@@ -32,14 +32,9 @@ def load_pref(pref_name: str, default):
         return default
 
     # determine type from default and query accordingly
-    if isinstance(default, int):
+    if isinstance(default, int | float | str):
         return cmds.optionVar(query=key)
-    elif isinstance(default, float):
-        return cmds.optionVar(query=key)
-    elif isinstance(default, str):
-        return cmds.optionVar(query=key)
-    else:
-        return default
+    return default
 
 
 def save_pref(pref_name: str, value) -> None:
@@ -59,7 +54,7 @@ def save_pref(pref_name: str, value) -> None:
         cmds.optionVar(stringValue=(key, value))
 
 
-def set_selected_mesh(field_name: str, *args) -> None:
+def set_selected_mesh(field_name: str, *_args) -> None:
     """Populate a text field with the currently selected mesh.
 
     Args:
@@ -85,7 +80,7 @@ def set_selected_mesh(field_name: str, *args) -> None:
     cmds.textFieldButtonGrp(field_name, edit=True, text=mesh_name)
 
 
-def execute_grass_generation(*args) -> None:
+def execute_grass_generation(*_args) -> None:
     """Execute grass generation with current UI values.
 
     Args:
@@ -180,7 +175,7 @@ def execute_grass_generation(*args) -> None:
         # show error message
         cmds.confirmDialog(
             title="Error",
-            message=f"Grass generation failed:\n\n{str(e)}",
+            message=f"Grass generation failed:\n\n{e!s}",
             button=["OK"],
             defaultButton="OK",
             icon="critical",
@@ -233,8 +228,8 @@ def show_grass_ui() -> None:
         annotation="The grass blade mesh to instance. Select your grass geometry and click 'Set Selected'.",
     )
 
-    cmds.setParent('..')  # exit columnLayout
-    cmds.setParent('..')  # exit frameLayout
+    cmds.setParent("..")  # exit columnLayout
+    cmds.setParent("..")  # exit frameLayout
 
     # grass parameters section
     cmds.frameLayout(label="Grass Parameters", collapsable=True, collapse=False)
@@ -347,8 +342,8 @@ def show_grass_ui() -> None:
         annotation="How much grass grows toward the sky vs perpendicular to the terrain. 0 = follows surface normal, 1 = always vertical, 0.75 = mostly vertical with slope awareness.",
     )
 
-    cmds.setParent('..')  # exit columnLayout
-    cmds.setParent('..')  # exit frameLayout
+    cmds.setParent("..")  # exit columnLayout
+    cmds.setParent("..")  # exit frameLayout
 
     # advanced section (expanded by default)
     cmds.frameLayout(label="Advanced", collapsable=True, collapse=False)
@@ -443,8 +438,8 @@ def show_grass_ui() -> None:
         annotation="Distance from obstacle edge where grass density peaks (scene units). Controls how far from objects the densest grass ring appears.",
     )
 
-    cmds.setParent('..')  # exit columnLayout
-    cmds.setParent('..')  # exit frameLayout
+    cmds.setParent("..")  # exit columnLayout
+    cmds.setParent("..")  # exit frameLayout
 
     # action buttons
     cmds.rowLayout(numberOfColumns=2, columnWidth2=(210, 210), height=40)
@@ -464,8 +459,8 @@ def show_grass_ui() -> None:
         annotation="Close this window. Settings are saved automatically.",
     )
 
-    cmds.setParent('..')  # exit rowLayout
-    cmds.setParent('..')  # exit main columnLayout
+    cmds.setParent("..")  # exit rowLayout
+    cmds.setParent("..")  # exit main columnLayout
 
     # show the window
     cmds.showWindow(window)

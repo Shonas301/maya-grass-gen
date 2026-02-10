@@ -17,7 +17,10 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass
@@ -81,7 +84,7 @@ class Timer:
         self.end_time: float = 0.0
         self.duration: float = 0.0
 
-    def __enter__(self) -> "Timer":
+    def __enter__(self) -> Timer:
         self.start_time = time.perf_counter()
         return self
 
@@ -121,13 +124,12 @@ def force_maya_evaluation() -> float:
     cmds.refresh(force=True)
 
     # query all MASH waiters to force evaluation
+    import contextlib
     waiters = cmds.ls(type="MASH_Waiter") or []
     for waiter in waiters:
-        try:
-            # reading the output attribute forces evaluation
+        # reading the output attribute forces evaluation
+        with contextlib.suppress(Exception):
             cmds.getAttr(f"{waiter}.outputPoints")
-        except Exception:
-            pass
 
     return time.perf_counter() - start
 
@@ -222,7 +224,7 @@ def benchmark_full_pipeline(
 
     # phase 2: force MASH evaluation (the hidden cost!)
     with Timer("MASH evaluation") as t:
-        eval_time = force_maya_evaluation()
+        force_maya_evaluation()
     report.add(TimingResult("MASH evaluation (forced)", t.duration))
 
     # phase 3: one more refresh to ensure rendering
@@ -236,10 +238,9 @@ def benchmark_full_pipeline(
         report.print_report()
 
     # cleanup: delete the MASH network
-    try:
+    import contextlib
+    with contextlib.suppress(Exception):
         cmds.delete(network_name)
-    except Exception:
-        pass
 
     return report
 
@@ -350,9 +351,10 @@ def profile_flow_field(
     if str(src_path) not in sys.path:
         sys.path.insert(0, str(src_path))
 
-    import numpy as np
     # import directly from module file to avoid maya dependencies
     import importlib.util
+
+    import numpy as np
     flow_field_path = src_path / "maya_grass_gen" / "flow_field.py"
     spec = importlib.util.spec_from_file_location("flow_field", flow_field_path)
     flow_field = importlib.util.module_from_spec(spec)
@@ -427,11 +429,10 @@ if __name__ == "__main__":
                 point_count=count,
                 obstacle_count=args.obstacles,
             )
+    elif MAYA_AVAILABLE:
+        run_benchmark(point_counts=args.counts)
     else:
-        if MAYA_AVAILABLE:
-            run_benchmark(point_counts=args.counts)
-        else:
-            print("Maya not available. Use --flow-field-only for standalone testing.")
-            print("\nRunning flow field benchmark instead...")
-            for count in args.counts:
-                profile_flow_field(point_count=count, obstacle_count=args.obstacles)
+        print("Maya not available. Use --flow-field-only for standalone testing.")
+        print("\nRunning flow field benchmark instead...")
+        for count in args.counts:
+            profile_flow_field(point_count=count, obstacle_count=args.obstacles)

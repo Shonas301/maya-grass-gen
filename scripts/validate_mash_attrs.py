@@ -16,9 +16,9 @@ from pathlib import Path
 
 
 def get_mash_node_attributes(node_type: str) -> set[str]:
-    """get all attributes for a MASH node type."""
-    from maya import cmds
+    """Get all attributes for a MASH node type."""
     import MASH.api as mapi
+    from maya import cmds
 
     # create a temporary network
     network = mapi.Network()
@@ -38,9 +38,9 @@ def get_mash_node_attributes(node_type: str) -> set[str]:
 
 
 def extract_mash_setattr_calls(filepath: Path) -> list[tuple[str, str, int]]:
-    """extract MASH-related cmds.setAttr calls from a python file.
+    """Extract MASH-related cmds.setAttr calls from a python file.
 
-    returns:
+    Returns:
         list of (node_type, attribute_name, line_number) tuples
     """
     content = filepath.read_text()
@@ -49,21 +49,21 @@ def extract_mash_setattr_calls(filepath: Path) -> list[tuple[str, str, int]]:
     # pattern for cmds.setAttr(f"{var}.attr", ...)
     pattern = r'cmds\.setAttr\(f["\']{\s*(\w+)\s*}\.(\w+)["\']'
 
-    for i, line in enumerate(content.split('\n'), 1):
+    for i, line in enumerate(content.split("\n"), 1):
         match = re.search(pattern, line)
         if match:
             var_name = match.group(1).lower()
             attr_name = match.group(2)
 
             # determine node type from variable name
-            if 'random' in var_name:
-                node_type = 'MASH_Random'
-            elif 'offset' in var_name:
-                node_type = 'MASH_Offset'
-            elif 'python' in var_name:
-                node_type = 'MASH_Python'
-            elif 'distribute' in var_name:
-                node_type = 'MASH_Distribute'
+            if "random" in var_name:
+                node_type = "MASH_Random"
+            elif "offset" in var_name:
+                node_type = "MASH_Offset"
+            elif "python" in var_name:
+                node_type = "MASH_Python"
+            elif "distribute" in var_name:
+                node_type = "MASH_Distribute"
             else:
                 continue  # skip non-MASH nodes
 
@@ -73,7 +73,7 @@ def extract_mash_setattr_calls(filepath: Path) -> list[tuple[str, str, int]]:
 
 
 def validate_generator():
-    """validate all MASH attributes in generator.py."""
+    """Validate all MASH attributes in generator.py."""
     # find generator.py
     script_dir = Path(__file__).parent
     generator_path = script_dir.parent / "src" / "maya_grass_gen" / "generator.py"
@@ -125,23 +125,22 @@ def validate_generator():
         for error in errors:
             print(error)
         return False
-    else:
-        print("=" * 60)
-        print("VALIDATION PASSED - all MASH attributes are valid")
-        print("=" * 60)
-        return True
+    print("=" * 60)
+    print("VALIDATION PASSED - all MASH attributes are valid")
+    print("=" * 60)
+    return True
 
 
 def print_mash_attrs(node_type: str):
-    """print all attributes for a MASH node type."""
+    """Print all attributes for a MASH node type."""
     attrs = get_mash_node_attributes(node_type)
     print(f"\n=== {node_type} attributes ({len(attrs)} total) ===")
 
     # group by prefix
-    scale_attrs = sorted([a for a in attrs if 'scale' in a.lower()])
-    position_attrs = sorted([a for a in attrs if 'position' in a.lower()])
-    rotation_attrs = sorted([a for a in attrs if 'rotation' in a.lower() or 'rotate' in a.lower()])
-    offset_attrs = sorted([a for a in attrs if 'offset' in a.lower()])
+    scale_attrs = sorted([a for a in attrs if "scale" in a.lower()])
+    position_attrs = sorted([a for a in attrs if "position" in a.lower()])
+    rotation_attrs = sorted([a for a in attrs if "rotation" in a.lower() or "rotate" in a.lower()])
+    offset_attrs = sorted([a for a in attrs if "offset" in a.lower()])
 
     if scale_attrs:
         print(f"  scale: {scale_attrs}")

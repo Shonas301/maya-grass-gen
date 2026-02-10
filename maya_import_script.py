@@ -63,6 +63,7 @@ def run(  # noqa: PLR0913
     setup_path()
 
     import importlib
+
     import maya_grass_gen
 
     importlib.reload(maya_grass_gen)

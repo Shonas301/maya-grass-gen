@@ -1,28 +1,24 @@
-"""
-find geometry intersecting with terrain in maya
+"""find geometry intersecting with terrain in maya
 select your terrain mesh first, then run this script
 """
 
-import maya.cmds as cmds
-import maya.api.OpenMaya as om
+from maya import cmds
 
 
 def get_bounding_box(mesh):
-    """get world-space bounding box for a mesh"""
-    bbox = cmds.exactWorldBoundingBox(mesh)
-    return bbox  # [xmin, ymin, zmin, xmax, ymax, zmax]
+    """Get world-space bounding box for a mesh"""
+    return cmds.exactWorldBoundingBox(mesh)  # [xmin, ymin, zmin, xmax, ymax, zmax]
 
 
 def boxes_intersect(box1, box2):
-    """check if two bounding boxes overlap"""
+    """Check if two bounding boxes overlap"""
     return (box1[0] <= box2[3] and box1[3] >= box2[0] and  # x overlap
             box1[1] <= box2[4] and box1[4] >= box2[1] and  # y overlap
             box1[2] <= box2[5] and box1[5] >= box2[2])     # z overlap
 
 
-def find_terrain_intersections(terrain=None):
-    """
-    find all meshes intersecting with terrain
+def find_terrain_intersections(terrain=None):  # noqa: C901
+    """Find all meshes intersecting with terrain
     if terrain is None, uses current selection
     """
     # get terrain from selection if not provided
@@ -34,7 +30,7 @@ def find_terrain_intersections(terrain=None):
         terrain = sel[0]
 
     # verify it's a mesh
-    shapes = cmds.listRelatives(terrain, shapes=True, type='mesh')
+    shapes = cmds.listRelatives(terrain, shapes=True, type="mesh")
     if not shapes:
         print(f"error: {terrain} is not a mesh")
         return []
@@ -44,7 +40,7 @@ def find_terrain_intersections(terrain=None):
     print(f"terrain bbox: {terrain_bbox}\n")
 
     # get all meshes in scene
-    all_meshes = cmds.ls(type='mesh', long=True)
+    all_meshes = cmds.ls(type="mesh", long=True)
     all_transforms = set()
     for mesh in all_meshes:
         parent = cmds.listRelatives(mesh, parent=True, fullPath=True)
@@ -71,7 +67,7 @@ def find_terrain_intersections(terrain=None):
     print(f"found {len(intersecting)} objects intersecting with terrain:")
     print("-" * 50)
     for geo in intersecting:
-        short_name = geo.split('|')[-1]
+        short_name = geo.split("|")[-1]
         print(f"  {short_name}")
     print("-" * 50)
 

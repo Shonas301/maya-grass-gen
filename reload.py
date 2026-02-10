@@ -4,7 +4,7 @@ run this in maya's script editor before importing maya_grass_gen
 to ensure all cached modules are purged and fresh code is loaded.
 
 usage:
-    exec(open(r"C:\path\to\maya-grass-gen\reload.py").read())
+    exec(open(r"C:\\path\to\\maya-grass-gen\reload.py").read())
     from maya_grass_gen import generate_grass
 """
 import sys
@@ -17,7 +17,6 @@ print(f"scrubbed {len(to_delete)} cached modules: {to_delete}")
 
 # now import fresh
 import maya_grass_gen
-from maya_grass_gen import generate_grass
 
 print("maya_grass_gen loaded fresh")
 print(f"module location: {maya_grass_gen.__file__}")

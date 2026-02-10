@@ -1,6 +1,7 @@
-from .constants import np
-from .internals import _init, _noise2, _noise3, _noise4, _noise2a, _noise3a, _noise4a
 import time
+
+from .constants import np
+from .internals import _init, _noise2, _noise2a, _noise3, _noise3a, _noise4, _noise4a
 
 # Why 3 (and not just 0 or something)? I ran into a bug with"overflowing int" errors while refactoring in numpy and
 # using a non-zero seed value... This is a reminder
@@ -12,8 +13,7 @@ OpenSimplex n-dimensional gradient noise algorithm, based on work by Kurt Spence
 
 
 def seed(seed: int = DEFAULT_SEED) -> None:
-    """
-    Seeds the underlying permutation array (which produces different outputs),
+    """Seeds the underlying permutation array (which produces different outputs),
     using a 64-bit integer number.
     If no value is provided, a static default will be used instead.
 
@@ -24,8 +24,7 @@ def seed(seed: int = DEFAULT_SEED) -> None:
 
 
 def random_seed() -> None:
-    """
-    Works just like seed(), except it uses the system time (in ns) as a seed value.
+    """Works just like seed(), except it uses the system time (in ns) as a seed value.
     Not guaranteed to be random so use at your own risk.
 
     >>> random_seed()
@@ -34,8 +33,7 @@ def random_seed() -> None:
 
 
 def get_seed() -> int:
-    """
-    Return the value used to seed the initial state.
+    """Return the value used to seed the initial state.
     :return: seed as integer
 
     >>> get_seed()
@@ -45,8 +43,7 @@ def get_seed() -> int:
 
 
 def noise2(x: float, y: float) -> float:
-    """
-    Generate 2D OpenSimplex noise from X,Y coordinates.
+    """Generate 2D OpenSimplex noise from X,Y coordinates.
     :param x: x coordinate as float
     :param y: y coordinate as float
     :return:  generated 2D noise as float, between -1.0 and 1.0
@@ -58,8 +55,7 @@ def noise2(x: float, y: float) -> float:
 
 
 def noise2array(x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """
-    Generates 2D OpenSimplex noise using Numpy arrays for increased performance.
+    """Generates 2D OpenSimplex noise using Numpy arrays for increased performance.
     :param x: numpy array of x-coords
     :param y: numpy array of y-coords
     :return:  2D numpy array of shape (y.size, x.size) with the generated noise
@@ -75,8 +71,7 @@ def noise2array(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 
 
 def noise3(x: float, y: float, z: float) -> float:
-    """
-    Generate 3D OpenSimplex noise from X,Y,Z coordinates.
+    """Generate 3D OpenSimplex noise from X,Y,Z coordinates.
     :param x: x coordinate as float
     :param y: y coordinate as float
     :param z: z coordinate as float
@@ -89,8 +84,7 @@ def noise3(x: float, y: float, z: float) -> float:
 
 
 def noise3array(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    """
-    Generates 3D OpenSimplex noise using Numpy arrays for increased performance.
+    """Generates 3D OpenSimplex noise using Numpy arrays for increased performance.
     :param x: numpy array of x-coords
     :param y: numpy array of y-coords
     :param z: numpy array of z-coords
@@ -109,8 +103,7 @@ def noise3array(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
 
 
 def noise4(x: float, y: float, z: float, w: float) -> float:
-    """
-    Generate 4D OpenSimplex noise from X,Y,Z,W coordinates.
+    """Generate 4D OpenSimplex noise from X,Y,Z,W coordinates.
     :param x: x coordinate as float
     :param y: y coordinate as float
     :param z: z coordinate as float
@@ -124,8 +117,7 @@ def noise4(x: float, y: float, z: float, w: float) -> float:
 
 
 def noise4array(x: np.ndarray, y: np.ndarray, z: np.ndarray, w: np.ndarray) -> np.ndarray:
-    """
-    Generates 4D OpenSimplex noise using Numpy arrays for increased performance.
+    """Generates 4D OpenSimplex noise using Numpy arrays for increased performance.
     :param x: numpy array of x-coords
     :param y: numpy array of y-coords
     :param z: numpy array of z-coords
@@ -152,7 +144,7 @@ def noise4array(x: np.ndarray, y: np.ndarray, z: np.ndarray, w: np.ndarray) -> n
 
 
 # This class is provided for backwards compatibility and might disappear in the future. Use at your own risk.
-class OpenSimplex(object):
+class OpenSimplex:
     def __init__(self, seed: int) -> None:
         self._perm, self._perm_grad_index3 = _init(seed)
         self._seed = seed
