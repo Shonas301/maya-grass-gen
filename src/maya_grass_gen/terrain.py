@@ -522,7 +522,7 @@ class TerrainAnalyzer:
             min_radius: minimum radius for detected obstacles
             max_obstacle_radius: maximum radius for detected obstacles. obstacles larger
                 than this are filtered out (typically background/environment objects).
-                defaults to 25% of terrain diagonal if not specified.
+                defaults to 5% of terrain diagonal if not specified.
 
         Returns:
             list of detected obstacles from scene geometry
@@ -536,15 +536,17 @@ class TerrainAnalyzer:
         if self._bounds is None:
             return []
 
-        # calculate default max radius if not provided: 25% of terrain diagonal
+        # calculate default max radius if not provided: 5% of terrain diagonal
+        # (25% was too permissive — large environment meshes were being treated
+        # as obstacles, covering the entire terrain and rejecting all grass)
         if max_obstacle_radius is None:
             terrain_diagonal = np.sqrt(
                 self._bounds.width**2 + self._bounds.depth**2
             )
-            max_obstacle_radius = terrain_diagonal * 0.25
+            max_obstacle_radius = terrain_diagonal * 0.05
             if self.verbose:
                 print(f"max obstacle radius (auto): {max_obstacle_radius:.1f} "
-                      f"(25% of terrain diagonal {terrain_diagonal:.1f})")
+                      f"(5% of terrain diagonal {terrain_diagonal:.1f})")
         elif self.verbose:
             print(f"max obstacle radius (user): {max_obstacle_radius:.1f}")
 
@@ -679,7 +681,7 @@ class TerrainAnalyzer:
             min_radius: minimum obstacle radius
             merge_distance: distance to merge nearby obstacles
             exclude_objects: scene objects to exclude
-            max_obstacle_radius: maximum radius for scene obstacles (defaults to 25% terrain diagonal)
+            max_obstacle_radius: maximum radius for scene obstacles (defaults to 5% terrain diagonal)
 
         Returns:
             combined list of all detected obstacles

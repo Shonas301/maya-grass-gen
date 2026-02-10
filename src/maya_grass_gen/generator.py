@@ -455,7 +455,7 @@ class GrassGenerator:
         Args:
             exclude_objects: list of object names to exclude
             min_radius: minimum obstacle radius to detect
-            max_obstacle_radius: maximum obstacle radius (defaults to 25% terrain diagonal)
+            max_obstacle_radius: maximum obstacle radius (defaults to 5% terrain diagonal)
 
         Returns:
             number of obstacles detected from scene
@@ -489,7 +489,7 @@ class GrassGenerator:
             min_radius: minimum obstacle radius
             merge_distance: distance to merge nearby obstacles
             exclude_objects: scene objects to exclude
-            max_obstacle_radius: maximum obstacle radius for scene objects (defaults to 25% terrain diagonal)
+            max_obstacle_radius: maximum obstacle radius for scene objects (defaults to 5% terrain diagonal)
 
         Returns:
             total number of obstacles detected
