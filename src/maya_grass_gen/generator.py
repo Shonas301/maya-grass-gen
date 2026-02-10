@@ -848,13 +848,13 @@ class GrassGenerator:
 
         # the wrapper's .name property contains the correct node name
         if hasattr(node_wrapper, "name"):
-            name = node_wrapper.name
+            name: str = node_wrapper.name
             if name and cmds.objExists(name):
                 return name
 
         # fallback: try getNodeName() method
         if hasattr(node_wrapper, "getNodeName"):
-            name = node_wrapper.getNodeName()
+            name = str(node_wrapper.getNodeName())
             if name and cmds.objExists(name):
                 return name
 
@@ -866,7 +866,7 @@ class GrassGenerator:
             if filtered:
                 matches = filtered
         if matches:
-            return matches[-1]
+            return str(matches[-1])
 
         msg = f"could not resolve MASH {node_type} node name from wrapper"
         raise RuntimeError(msg)

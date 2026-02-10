@@ -19,8 +19,8 @@ try:
     from scipy.spatial import KDTree
     SCIPY_AVAILABLE = True
 except ImportError:
-    KDTree = None  # type: ignore[misc, assignment]
-    distance_transform_edt = None  # type: ignore[misc, assignment]
+    KDTree = None
+    distance_transform_edt = None
     SCIPY_AVAILABLE = False
 
 # threshold for using KD-tree vs linear scan
@@ -385,7 +385,7 @@ class PointClusterer:
         # squared distances: (n, m)
         dist_sq = np.sum(diff * diff, axis=2)
         # check if inside any obstacle (using 85% inner radius)
-        return np.any(dist_sq < cache["inner_radii_sq"], axis=1)
+        return np.any(dist_sq < cache["inner_radii_sq"], axis=1)  # type: ignore[no-any-return]
 
     def _get_nearby_obstacle_indices(self, x: float, y: float) -> list[int]:
         """Get indices of obstacles that might affect this point.
@@ -408,7 +408,7 @@ class PointClusterer:
         if kdtree is not None:
             # use KD-tree to find obstacles within max influence radius
             # this reduces O(m) to O(log m + k) where k is nearby count
-            return kdtree.query_ball_point([x, y], cache["max_influence_radius"])
+            return kdtree.query_ball_point([x, y], cache["max_influence_radius"])  # type: ignore[no-any-return]
 
         # fallback: return all obstacle indices for linear scan
         return list(range(len(self.obstacles)))
@@ -480,9 +480,9 @@ class PointClusterer:
         # so effective influence_range in grid coords is:
         # influence_radius - inner_radius = influence_radius - radius*0.85
         min_influence_range = min(
-            obs.influence_radius - obs.radius * 0.85
+            (obs.influence_radius or obs.radius * 2.5) - obs.radius * 0.85
             for obs in self.obstacles
-        ) if self.obstacles else 0
+        ) if self.obstacles else 0.0
         sigma = min_influence_range * self.config.cluster_falloff
 
         # for points outside obstacles, apply gaussian density boost near edges
@@ -608,7 +608,7 @@ class PointClusterer:
         # bilinear interpolation (vectorized)
         v0 = v00 * (1 - fx) + v10 * fx
         v1 = v01 * (1 - fx) + v11 * fx
-        return v0 * (1 - fy) + v1 * fy
+        return v0 * (1 - fy) + v1 * fy  # type: ignore[no-any-return]
 
     def get_density_at(self, x: float, y: float) -> float:
         """Calculate point density at a position.
@@ -921,10 +921,10 @@ class PointClusterer:
         if self.verbose and points and self.obstacles:
             sample_size = min(len(points), 200)
             sample_indices = self.rng.choice(len(points), sample_size, replace=False)
-            densities = [self.get_density_at(points[i][0], points[i][1]) for i in sample_indices]
+            sampled_densities = [self.get_density_at(points[i][0], points[i][1]) for i in sample_indices]
             print(f"[density diagnostics] sampled {sample_size} points: "
-                  f"min={min(densities):.3f}, max={max(densities):.3f}, "
-                  f"mean={sum(densities)/len(densities):.3f}, "
+                  f"min={min(sampled_densities):.3f}, max={max(sampled_densities):.3f}, "
+                  f"mean={sum(sampled_densities)/len(sampled_densities):.3f}, "
                   f"rejection_rate={phase1_rejected}/{phase1_total} "
                   f"({phase1_rejected/max(phase1_total,1)*100:.1f}%)")
 

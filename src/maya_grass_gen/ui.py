@@ -8,7 +8,10 @@ Usage:
     show_grass_ui()
 """
 
+from __future__ import annotations
+
 import functools
+from typing import Any
 
 from maya import cmds
 
@@ -17,7 +20,7 @@ WINDOW_NAME = "grassGeneratorUI"
 PREF_PREFIX = "grassUI_"
 
 
-def load_pref(pref_name: str, default):
+def load_pref(pref_name: str, default: int | float | str) -> int | float | str:
     """Load a preference value from Maya's optionVar system.
 
     Args:
@@ -31,13 +34,11 @@ def load_pref(pref_name: str, default):
     if not cmds.optionVar(exists=key):
         return default
 
-    # determine type from default and query accordingly
-    if isinstance(default, int | float | str):
-        return cmds.optionVar(query=key)
-    return default
+    result: int | float | str = cmds.optionVar(query=key)
+    return result
 
 
-def save_pref(pref_name: str, value) -> None:
+def save_pref(pref_name: str, value: int | float | str) -> None:
     """Save a preference value to Maya's optionVar system.
 
     Args:
@@ -54,7 +55,7 @@ def save_pref(pref_name: str, value) -> None:
         cmds.optionVar(stringValue=(key, value))
 
 
-def set_selected_mesh(field_name: str, *_args) -> None:
+def set_selected_mesh(field_name: str, *_args: Any) -> None:
     """Populate a text field with the currently selected mesh.
 
     Args:
@@ -80,7 +81,7 @@ def set_selected_mesh(field_name: str, *_args) -> None:
     cmds.textFieldButtonGrp(field_name, edit=True, text=mesh_name)
 
 
-def execute_grass_generation(*_args) -> None:
+def execute_grass_generation(*_args: Any) -> None:
     """Execute grass generation with current UI values.
 
     Args:
