@@ -301,7 +301,8 @@ class GrassGenerator:
         tilts = []
         height_snapped = 0
         raycast_hits = 0
-        fallback_used = 0
+        discarded = 0
+        surviving_points = []
         for point in self._grass_points:
             try:
                 # cast ray downward from above terrain to find surface at this XZ
@@ -330,14 +331,11 @@ class GrassGenerator:
                             surface_pt, om2.MSpace.kWorld,
                         )
                 else:
-                    # ray missed (point outside mesh XZ extent) -- use closest
-                    query_point = om2.MPoint(point.x, point.y, point.z)
-                    closest, normal = mesh_fn.getClosestPointAndNormal(
-                        query_point, om2.MSpace.kWorld,
-                    )
-                    point.y = closest.y
-                    height_snapped += 1
-                    fallback_used += 1
+                    # ray missed -- no terrain surface below this point, discard it
+                    discarded += 1
+                    continue
+
+                surviving_points.append(point)
 
                 if skip_tilt:
                     tilts.append((0.0, 0.0))
@@ -360,8 +358,10 @@ class GrassGenerator:
 
                 tilts.append((tilt_angle, tilt_direction))
             except Exception:
-                tilts.append((0.0, 0.0))
+                # raycast error -- discard this point too
+                discarded += 1
 
+        self._grass_points = surviving_points
         self._terrain_tilts = tilts
 
         # height diagnostics
@@ -369,7 +369,7 @@ class GrassGenerator:
             heights = [p.y for p in self._grass_points]
             print(f"[terrain height] snapped {height_snapped}/{len(self._grass_points)} "
                   f"points to mesh surface "
-                  f"(raycast={raycast_hits}, fallback={fallback_used})")
+                  f"(raycast={raycast_hits}, discarded={discarded})")
             print(f"[terrain height] Y range: min={min(heights):.3f}, "
                   f"max={max(heights):.3f}, mean={sum(heights)/len(heights):.3f}")
 
