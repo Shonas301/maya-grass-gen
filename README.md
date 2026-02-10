@@ -12,6 +12,18 @@ Standalone Python package for generating animated grass in Autodesk Maya using f
 
 ## Installation
 
+### Download Latest Release
+
+```zsh
+# macOS / Linux
+curl -L -o maya-grass-gen.zip https://github.com/Shonas301/maya-grass-gen/releases/latest/download/maya-grass-gen.zip
+
+# or with wget
+wget -O maya-grass-gen.zip https://github.com/Shonas301/maya-grass-gen/releases/latest/download/maya-grass-gen.zip
+```
+
+Extract the zip, then drag `maya_grass_plugin/install.mel` into the Maya viewport to install.
+
 ### Development Setup
 
 ```zsh

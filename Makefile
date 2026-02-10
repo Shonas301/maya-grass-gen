@@ -1,4 +1,4 @@
-.PHONY: install install-dev lint typecheck test test-maya all clean
+.PHONY: install install-dev lint typecheck test test-maya all clean release
 
 # path to mayapy - override with: make test-maya MAYAPY=/path/to/mayapy
 MAYAPY ?= /System/Volumes/Data/Applications/Autodesk/maya2026/Maya.app/Contents/bin/mayapy
@@ -30,3 +30,11 @@ clean:
 	rm -rf build dist *.egg-info
 	rm -rf .pytest_cache .mypy_cache .ruff_cache
 	find . -type d -name __pycache__ -exec rm -rf {} +
+
+# cut a release: make release VERSION=1.2.0
+# add DRY_RUN=1 to preview without making changes
+release:
+ifndef VERSION
+	$(error VERSION is required — usage: make release VERSION=1.2.0)
+endif
+	./scripts/release.sh $(if $(DRY_RUN),--dry-run) $(VERSION)
