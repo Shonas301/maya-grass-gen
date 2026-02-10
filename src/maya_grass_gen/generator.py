@@ -301,8 +301,10 @@ class GrassGenerator:
         tilts = []
         height_snapped = 0
         raycast_hits = 0
+        fallback_used = 0
         discarded = 0
         surviving_points = []
+        total_points = len(self._grass_points)
         for point in self._grass_points:
             try:
                 # cast ray downward from above terrain to find surface at this XZ
@@ -310,9 +312,12 @@ class GrassGenerator:
                 ray_source = om2.MFloatPoint(point.x, ray_y, point.z)
                 hit_point, hit_param, hit_face, _hit_tri, _bary1, _bary2 = (
                     mesh_fn.closestIntersection(
-                        ray_source, ray_dir,
+                        ray_source,
+                        ray_dir,
                         om2.MSpace.kWorld,
-                        ray_y + abs(self.terrain.bounds.min_y if self.terrain.bounds else 0) + 200.0,
+                        ray_y
+                        + abs(self.terrain.bounds.min_y if self.terrain.bounds else 0)
+                        + 200.0,
                         False,  # noqa: FBT003
                         accelParams=accel_params,
                     )
@@ -328,59 +333,78 @@ class GrassGenerator:
                         # get normal at the hit point for tilt calculation
                         surface_pt = om2.MPoint(hit_point.x, hit_point.y, hit_point.z)
                         _closest, normal = mesh_fn.getClosestPointAndNormal(
-                            surface_pt, om2.MSpace.kWorld,
+                            surface_pt,
+                            om2.MSpace.kWorld,
                         )
                 else:
-                    # ray missed -- no terrain surface below this point, discard it
-                    discarded += 1
-                    continue
+                    # ray missed -- fall back to closest point on mesh surface
+                    query_point = om2.MPoint(point.x, point.y, point.z)
+                    closest, normal = mesh_fn.getClosestPointAndNormal(
+                        query_point,
+                        om2.MSpace.kWorld,
+                    )
+                    point.y = closest.y
+                    height_snapped += 1
+                    fallback_used += 1
 
-                surviving_points.append(point)
-
+                # compute tilt before appending so surviving_points and tilts
+                # stay in sync even if an exception is thrown
                 if skip_tilt:
-                    tilts.append((0.0, 0.0))
-                    continue
+                    tilt = (0.0, 0.0)
+                else:
+                    normal_vec = om2.MVector(normal)
+                    blended = normal_vec * (1.0 - g) + world_up * g
 
-                # blend normal with world-up: D = (1-g)*N + g*U
-                normal_vec = om2.MVector(normal)
-                blended = normal_vec * (1.0 - g) + world_up * g
+                    length = blended.length()
+                    if length < 1e-8:
+                        tilt = (0.0, 0.0)
+                    else:
+                        d_hat = blended / length
+                        tilt_angle = math.degrees(
+                            math.acos(max(-1.0, min(1.0, d_hat.y)))
+                        )
+                        tilt_direction = math.degrees(math.atan2(d_hat.z, d_hat.x))
+                        tilt = (tilt_angle, tilt_direction)
 
-                # normalize
-                length = blended.length()
-                if length < 1e-8:
-                    tilts.append((0.0, 0.0))
-                    continue
-                d_hat = blended / length
-
-                # decompose: tilt_angle = acos(Dy), tilt_direction = atan2(Dz, Dx)
-                tilt_angle = math.degrees(math.acos(max(-1.0, min(1.0, d_hat.y))))
-                tilt_direction = math.degrees(math.atan2(d_hat.z, d_hat.x))
-
-                tilts.append((tilt_angle, tilt_direction))
+                # append atomically so the two lists cannot go out of sync
+                surviving_points.append(point)
+                tilts.append(tilt)
             except Exception:
-                # raycast error -- discard this point too
                 discarded += 1
 
         self._grass_points = surviving_points
         self._terrain_tilts = tilts
 
         # height diagnostics
-        if self.verbose and self._grass_points:
-            heights = [p.y for p in self._grass_points]
-            print(f"[terrain height] snapped {height_snapped}/{len(self._grass_points)} "
-                  f"points to mesh surface "
-                  f"(raycast={raycast_hits}, discarded={discarded})")
-            print(f"[terrain height] Y range: min={min(heights):.3f}, "
-                  f"max={max(heights):.3f}, mean={sum(heights)/len(heights):.3f}")
+        if self.verbose:
+            if self._grass_points:
+                heights = [p.y for p in self._grass_points]
+                print(
+                    f"[terrain height] snapped {height_snapped}/{len(self._grass_points)} "
+                    f"points to mesh surface "
+                    f"(raycast={raycast_hits}, fallback={fallback_used}, discarded={discarded})"
+                )
+                print(
+                    f"[terrain height] Y range: min={min(heights):.3f}, "
+                    f"max={max(heights):.3f}, mean={sum(heights) / len(heights):.3f}"
+                )
+            elif total_points > 0:
+                print(
+                    f"[terrain height] WARNING: all {total_points} points discarded "
+                    f"(raycast={raycast_hits}, fallback={fallback_used}, discarded={discarded})"
+                )
 
         if self.verbose and not skip_tilt:
-            print(f"[terrain tilt] computed {len(tilts)} normals "
-                  f"(gravity_weight={g:.2f})")
+            print(
+                f"[terrain tilt] computed {len(tilts)} normals (gravity_weight={g:.2f})"
+            )
             if tilts:
                 angles = [t[0] for t in tilts]
-                print(f"[terrain tilt] angle range: "
-                      f"min={min(angles):.1f}deg, max={max(angles):.1f}deg, "
-                      f"mean={sum(angles)/len(angles):.1f}deg")
+                print(
+                    f"[terrain tilt] angle range: "
+                    f"min={min(angles):.1f}deg, max={max(angles):.1f}deg, "
+                    f"mean={sum(angles) / len(angles):.1f}deg"
+                )
 
     def load_bump_map(self, image_path: str) -> None:
         """Load bump/displacement map for obstacle detection.
@@ -531,7 +555,9 @@ class GrassGenerator:
         if CLUSTERING_AVAILABLE and self.terrain.obstacles:
             # use clustered point generation (wave 2)
             if self.verbose:
-                print(f"using clustered point generation ({len(self.terrain.obstacles)} obstacles)")
+                print(
+                    f"using clustered point generation ({len(self.terrain.obstacles)} obstacles)"
+                )
             points = self._generate_clustered_points(count, seed)
             scale_range = scale_variation_wave2
             if self.verbose:
@@ -584,10 +610,12 @@ class GrassGenerator:
         # scale diagnostics
         if self.verbose and self._grass_points:
             all_scales = [p.scale for p in self._grass_points]
-            print(f"[scale diagnostics] {len(all_scales)} points: "
-                  f"min={min(all_scales):.3f}, max={max(all_scales):.3f}, "
-                  f"mean={sum(all_scales)/len(all_scales):.3f}, "
-                  f"range=({scale_range[0]}, {scale_range[1]})")
+            print(
+                f"[scale diagnostics] {len(all_scales)} points: "
+                f"min={min(all_scales):.3f}, max={max(all_scales):.3f}, "
+                f"mean={sum(all_scales) / len(all_scales):.3f}, "
+                f"range=({scale_range[0]}, {scale_range[1]})"
+            )
 
         if self.verbose:
             print(f"point generation complete: {len(self._grass_points)} points")
@@ -615,10 +643,19 @@ class GrassGenerator:
         # debug: print obstacle statistics
         if self.verbose and flow_obstacles:
             radii = [obs["radius"] for obs in flow_obstacles]
-            influence_radii = [obs.get("influence_radius", obs["radius"] * 2.5) for obs in flow_obstacles]
-            print(f"obstacle radii: min={min(radii):.1f}, max={max(radii):.1f}, avg={sum(radii)/len(radii):.1f}")
-            print(f"obstacle influence radii: min={min(influence_radii):.1f}, max={max(influence_radii):.1f}, avg={sum(influence_radii)/len(influence_radii):.1f}")
-            print(f"terrain dimensions: width={bounds.width:.1f}, depth={bounds.depth:.1f}")
+            influence_radii = [
+                obs.get("influence_radius", obs["radius"] * 2.5)
+                for obs in flow_obstacles
+            ]
+            print(
+                f"obstacle radii: min={min(radii):.1f}, max={max(radii):.1f}, avg={sum(radii) / len(radii):.1f}"
+            )
+            print(
+                f"obstacle influence radii: min={min(influence_radii):.1f}, max={max(influence_radii):.1f}, avg={sum(influence_radii) / len(influence_radii):.1f}"
+            )
+            print(
+                f"terrain dimensions: width={bounds.width:.1f}, depth={bounds.depth:.1f}"
+            )
 
         config = ClusteringConfig(**self._clustering_config)
         clusterer = PointClusterer(
@@ -649,10 +686,7 @@ class GrassGenerator:
         points = clusterer.generate_points_grid_based(count)
 
         # convert back to world coordinates
-        return [
-            (x + bounds.min_x, y + bounds.min_z)
-            for x, y in points
-        ]
+        return [(x + bounds.min_x, y + bounds.min_z) for x, y in points]
 
     def _generate_uniform_points(
         self, count: int, rng: np.random.Generator
@@ -775,7 +809,9 @@ class GrassGenerator:
         try:
             # point-based distribution (pre-computed positions with animated wind)
             distribute = mash_network.addNode("MASH_Distribute")
-            distribute_name = self._get_mash_node_name(distribute, "Distribute", network_name)
+            distribute_name = self._get_mash_node_name(
+                distribute, "Distribute", network_name
+            )
             if self.verbose:
                 print(f"added MASH node: {distribute_name}")
             cmds.setAttr(f"{distribute_name}.pointCount", len(self._grass_points))
@@ -784,7 +820,9 @@ class GrassGenerator:
 
             # set positions via MASH python node with animated wind
             python_node = mash_network.addNode("MASH_Python")
-            python_node_name = self._get_mash_node_name(python_node, "Python", network_name)
+            python_node_name = self._get_mash_node_name(
+                python_node, "Python", network_name
+            )
             if self.verbose:
                 print(f"added MASH node: {python_node_name}")
 
@@ -826,7 +864,9 @@ class GrassGenerator:
         # reset pivot to origin
         cmds.xform(geometry, worldSpace=True, pivots=[0, 0, 0])
 
-    def _get_mash_node_name(self, node_wrapper: Any, node_type: str, network_name: str = "") -> str:
+    def _get_mash_node_name(
+        self, node_wrapper: Any, node_type: str, network_name: str = ""
+    ) -> str:
         """Resolve actual Maya node name from MASH node wrapper.
 
         The MASH API addNode() returns a wrapper object whose .name property
@@ -955,10 +995,14 @@ class GrassGenerator:
             # generate wind expression that updates with time
             wind_code = self._generate_wind_python_code()
             if self.verbose:
-                print(f"setting python code ({len(wind_code)} chars) on {python_node_name}")
+                print(
+                    f"setting python code ({len(wind_code)} chars) on {python_node_name}"
+                )
             cmds.setAttr(f"{python_node_name}.pyScript", wind_code, type="string")
         except RuntimeError as e:
-            msg = f"failed to create mesh-distributed MASH network '{network_name}': {e}"
+            msg = (
+                f"failed to create mesh-distributed MASH network '{network_name}': {e}"
+            )
             raise RuntimeError(msg) from e
 
         if self.verbose:
@@ -979,7 +1023,11 @@ class GrassGenerator:
         positions_data = [(p.x, p.y, p.z) for p in self._grass_points]
         scales_data = [(p.scale, p.scale, p.scale) for p in self._grass_points]
         base_rotations = [p.rotation_y for p in self._grass_points]
-        terrain_tilts_data = list(self._terrain_tilts) if self._terrain_tilts else [(0.0, 0.0)] * len(self._grass_points)
+        terrain_tilts_data = (
+            list(self._terrain_tilts)
+            if self._terrain_tilts
+            else [(0.0, 0.0)] * len(self._grass_points)
+        )
 
         # obstacle data for flow deflection and visibility filtering
         obstacles_data = [
@@ -1144,7 +1192,11 @@ md.setData()
         # pre-computed obstacle-avoiding positions and scales
         positions_data = [(p.x, p.y, p.z) for p in self._grass_points]
         scales_data = [(p.scale, p.scale, p.scale) for p in self._grass_points]
-        terrain_tilts_data = list(self._terrain_tilts) if self._terrain_tilts else [(0.0, 0.0)] * len(self._grass_points)
+        terrain_tilts_data = (
+            list(self._terrain_tilts)
+            if self._terrain_tilts
+            else [(0.0, 0.0)] * len(self._grass_points)
+        )
 
         # include obstacle data for flow deflection and visibility filtering
         obstacles_data = [
