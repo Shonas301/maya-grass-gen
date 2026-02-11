@@ -337,13 +337,24 @@ class GrassGenerator:
                             om2.MSpace.kWorld,
                         )
                 else:
-                    # ray missed -- fall back to closest point on mesh surface
+                    # ray missed -- find closest point on mesh surface
                     query_point = om2.MPoint(point.x, point.y, point.z)
                     closest, normal = mesh_fn.getClosestPointAndNormal(
                         query_point,
                         om2.MSpace.kWorld,
                     )
+                    # if point is far from mesh (outside actual surface, inside bbox gap),
+                    # discard it rather than placing grass in empty space
+                    dx = point.x - closest.x
+                    dz = point.z - closest.z
+                    dist_xz = math.sqrt(dx * dx + dz * dz)
+                    if dist_xz > self._clustering_config["min_distance"]:
+                        discarded += 1
+                        continue
+                    # close enough -- snap full position to mesh surface
+                    point.x = closest.x
                     point.y = closest.y
+                    point.z = closest.z
                     height_snapped += 1
                     fallback_used += 1
 
@@ -787,12 +798,18 @@ class GrassGenerator:
         # origin which silently shifts every instance.
         self._center_geometry_at_origin(grass_geometry)
 
+        # ensure grass geometry is visible (hidden source geo hides MASH output)
+        cmds.setAttr(f"{grass_geometry}.visibility", 1)
+
         # select grass geometry before creating MASH network
         # MASH picks up the selected object as the geometry to instance
         cmds.select(grass_geometry, replace=True)
 
         mash_network = mapi.Network()
         mash_network.createNetwork(name=network_name, geometry="Repro")
+
+        # hide the source geometry so the template blade isn't visible in viewport
+        cmds.setAttr(f"{grass_geometry}.visibility", 0)
 
         if distribute_on_mesh:
             # use mesh surface distribution

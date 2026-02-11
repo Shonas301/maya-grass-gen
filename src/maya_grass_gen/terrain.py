@@ -559,26 +559,27 @@ class TerrainAnalyzer:
 
         detected: list[DetectedObstacle] = []
 
-        # get all mesh transforms in scene
+        # get all mesh shapes in scene (using shapes directly gives per-component
+        # bounding boxes instead of grouping all shapes under one transform)
         meshes = cmds.ls(type="mesh", long=True) or []
-        transforms = set()
-        for mesh in meshes:
-            parent = cmds.listRelatives(mesh, parent=True, fullPath=True)
-            if parent:
-                transforms.add(parent[0])
 
         if self.verbose:
-            print(f"found {len(transforms)} mesh transforms to check")
+            print(f"found {len(meshes)} mesh shapes to check")
 
-        for transform in transforms:
-            # get short name for exclusion check
+        for mesh_shape in meshes:
+            # get parent transform for name/exclusion checks
+            parents = cmds.listRelatives(mesh_shape, parent=True, fullPath=True)
+            if not parents:
+                continue
+            transform = parents[0]
             short_name = transform.split("|")[-1]
             if short_name in exclude or transform in exclude:
                 continue
 
-            # get world bounding box
+            # compute bbox on the SHAPE, not the transform
+            # this gives individual bounding boxes for each mesh component
             try:
-                bbox = cmds.exactWorldBoundingBox(transform)
+                bbox = cmds.exactWorldBoundingBox(mesh_shape)
             except RuntimeError:
                 continue
 
