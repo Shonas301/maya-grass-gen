@@ -559,6 +559,23 @@ class TerrainAnalyzer:
 
         detected: list[DetectedObstacle] = []
 
+        # set up terrain mesh raycast so we can check local ground height
+        # per candidate shape (elevated connectors like lintels should not
+        # count as ground obstacles even if their bbox covers the terrain XZ)
+        terrain_mesh_fn = None
+        terrain_accel = None
+        terrain_ray_y = (self._bounds.max_y + 500.0) if self._bounds else 1500.0
+        if self.mesh_name:
+            try:
+                import maya.api.OpenMaya as om2
+                sel = om2.MSelectionList()
+                sel.add(self.mesh_name)
+                dag_path = sel.getDagPath(0)
+                terrain_mesh_fn = om2.MFnMesh(dag_path)
+                terrain_accel = terrain_mesh_fn.autoUniformGridParams()
+            except Exception:
+                terrain_mesh_fn = None
+
         # get all mesh shapes in scene (using shapes directly gives per-component
         # bounding boxes instead of grouping all shapes under one transform)
         meshes = cmds.ls(type="mesh", long=True) or []
@@ -595,14 +612,49 @@ class TerrainAnalyzer:
             ):
                 continue
 
-            # check if object is floating above the terrain (not intersecting in Y)
-            # allow some tolerance for objects sitting on terrain
-            height_tolerance = 50.0  # units above terrain max_y
-            if obj_min_y > self._bounds.max_y + height_tolerance:
-                if self.verbose:
-                    print(f"  skipping {short_name}: floating above terrain "
-                          f"(min_y={obj_min_y:.1f} > terrain max_y={self._bounds.max_y:.1f})")
-                continue
+            # check if object actually reaches the ground at its XZ position.
+            # elevated connectors (lintels, arches) have large XZ bboxes but
+            # their min_y is well above the terrain surface — they should not
+            # block grass on the ground below them.
+            if terrain_mesh_fn is not None:
+                import maya.api.OpenMaya as om2
+                center_x_check = (obj_min_x + obj_max_x) / 2
+                center_z_check = (obj_min_z + obj_max_z) / 2
+                ray_source = om2.MFloatPoint(center_x_check, terrain_ray_y, center_z_check)
+                ray_dir = om2.MFloatVector(0, -1, 0)
+                try:
+                    hit_pt, _param, _face, _tri, _b1, _b2 = (
+                        terrain_mesh_fn.closestIntersection(
+                            ray_source, ray_dir,
+                            om2.MSpace.kWorld,
+                            terrain_ray_y + 1000.0,
+                            False,  # noqa: FBT003
+                            accelParams=terrain_accel,
+                        )
+                    )
+                    if _face != -1:
+                        local_ground_y = hit_pt.y
+                        # shape must reach within ground_clearance of the surface
+                        # to count as a ground obstacle
+                        ground_clearance = 20.0
+                        if obj_min_y > local_ground_y + ground_clearance:
+                            if self.verbose:
+                                print(
+                                    f"  skipping {short_name}: elevated above ground "
+                                    f"(min_y={obj_min_y:.1f}, ground={local_ground_y:.1f})"
+                                )
+                            continue
+                except Exception:
+                    pass  # fall through to bbox checks below
+
+            # fallback: global terrain max check when no terrain mesh available
+            if terrain_mesh_fn is None:
+                height_tolerance = 50.0
+                if obj_min_y > self._bounds.max_y + height_tolerance:
+                    if self.verbose:
+                        print(f"  skipping {short_name}: floating above terrain "
+                              f"(min_y={obj_min_y:.1f} > terrain max_y={self._bounds.max_y:.1f})")
+                    continue
 
             # calculate center and radius from bounding box
             center_x = (obj_min_x + obj_max_x) / 2

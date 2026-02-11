@@ -117,6 +117,7 @@ def execute_grass_generation(*_args: Any) -> None:
     cluster_falloff = cmds.floatSliderGrp("cluster_falloff_field", query=True, value=True)
     edge_offset = cmds.floatSliderGrp("edge_offset_field", query=True, value=True)
     gravity_weight = cmds.floatSliderGrp("gravity_weight_field", query=True, value=True)
+    verbose = cmds.checkBoxGrp("verbose_field", query=True, value1=True)
 
     # save all preferences
     save_pref("terrain", terrain)
@@ -138,6 +139,7 @@ def execute_grass_generation(*_args: Any) -> None:
     save_pref("cluster_falloff", cluster_falloff)
     save_pref("edge_offset", edge_offset)
     save_pref("gravity_weight", gravity_weight)
+    save_pref("verbose", int(verbose))
 
     # execute generation
     try:
@@ -161,6 +163,7 @@ def execute_grass_generation(*_args: Any) -> None:
             edge_offset=edge_offset,
             persistence=persistence,
             gravity_weight=gravity_weight,
+            verbose=verbose,
         )
 
         # show success message
@@ -437,6 +440,15 @@ def show_grass_ui() -> None:
         precision=1,
         columnWidth3=(100, 50, 250),
         annotation="Distance from obstacle edge where grass density peaks (scene units). Controls how far from objects the densest grass ring appears.",
+    )
+
+    cmds.checkBoxGrp(
+        "verbose_field",
+        label="",
+        label1="Verbose Output",
+        value1=load_pref("verbose", 0),
+        columnWidth2=(100, 300),
+        annotation="Print detailed progress and diagnostic messages to the script editor during generation.",
     )
 
     cmds.setParent("..")  # exit columnLayout
