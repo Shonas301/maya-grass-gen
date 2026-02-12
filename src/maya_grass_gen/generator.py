@@ -244,13 +244,16 @@ class GrassGenerator:
         """
         self._gravity_weight = max(0.0, min(1.0, weight))
 
-    def _compute_terrain_tilts(self, terrain_mesh: str) -> None:
+    def _compute_terrain_tilts(
+        self,
+        terrain_mesh: str,
+        mesh_querier: Any | None = None,
+    ) -> None:
         """Query terrain surface and compute per-point height + tilt angles.
 
-        uses a downward ray-cast (MFnMesh.closestIntersection) to find the
-        mesh surface height at each grass point's XZ position, then snaps the
-        point's Y to the surface. also computes gravity-blended tilt
-        orientation from the surface normal.
+        uses a downward ray-cast to find the mesh surface height at each
+        grass point's XZ position, then snaps the point's Y to the surface.
+        also computes gravity-blended tilt orientation from the surface normal.
 
         ray-cast is necessary because getClosestPointAndNormal with a query
         at y=0 returns the geometrically nearest mesh point, which on hilly
@@ -265,38 +268,37 @@ class GrassGenerator:
 
         Args:
             terrain_mesh: name of the terrain mesh to query normals from
+            mesh_querier: optional MeshQuerier to use instead of constructing
+                one from the terrain mesh name. allows injecting a TrimeshQuerier
+                for testing without Maya.
         """
-        if not MAYA_AVAILABLE:
-            # no maya, no surface queries -- tilts stay at zero, heights unchanged
-            self._terrain_tilts = [(0.0, 0.0)] * len(self._grass_points)
-            return
+        from maya_grass_gen.mesh_query import (
+            MayaMeshQuerier,
+            compute_tilt_from_normal,
+        )
 
-        try:
-            import maya.api.OpenMaya as om2  # noqa: N813
-
-            # get the terrain mesh's dag path
-            sel = om2.MSelectionList()
-            sel.add(terrain_mesh)
-            dag_path = sel.getDagPath(0)
-            mesh_fn = om2.MFnMesh(dag_path)
-        except Exception:
-            # maya API not functional (mocked or unavailable)
-            if self.verbose:
-                print("[terrain] maya API unavailable, using zero tilts")
-            self._terrain_tilts = [(0.0, 0.0)] * len(self._grass_points)
-            return
+        # resolve the querier: injected > Maya > none
+        querier = mesh_querier
+        if querier is None:
+            if not MAYA_AVAILABLE:
+                self._terrain_tilts = [(0.0, 0.0)] * len(self._grass_points)
+                return
+            try:
+                querier = MayaMeshQuerier(terrain_mesh)
+            except Exception:
+                if self.verbose:
+                    print("[terrain] maya API unavailable, using zero tilts")
+                self._terrain_tilts = [(0.0, 0.0)] * len(self._grass_points)
+                return
 
         g = self._gravity_weight
-        world_up = om2.MVector(0, 1, 0)
         skip_tilt = g >= 1.0
 
         # ray origin height: well above the highest point on the terrain
         ray_y = (self.terrain.bounds.max_y if self.terrain.bounds else 1000.0) + 100.0
-        ray_dir = om2.MFloatVector(0, -1, 0)
-
-        # build acceleration structure once for faster repeated raycasts
-        # this caches spatial data for O(log n) queries instead of O(n)
-        accel_params = mesh_fn.autoUniformGridParams()
+        max_dist = ray_y + abs(
+            self.terrain.bounds.min_y if self.terrain.bounds else 0
+        ) + 200.0
 
         tilts = []
         height_snapped = 0
@@ -308,74 +310,52 @@ class GrassGenerator:
         for point in self._grass_points:
             try:
                 # cast ray downward from above terrain to find surface at this XZ
-                # uses cached acceleration structure for faster repeated queries
-                ray_source = om2.MFloatPoint(point.x, ray_y, point.z)
-                hit_point, hit_param, hit_face, _hit_tri, _bary1, _bary2 = (
-                    mesh_fn.closestIntersection(
-                        ray_source,
-                        ray_dir,
-                        om2.MSpace.kWorld,
-                        ray_y
-                        + abs(self.terrain.bounds.min_y if self.terrain.bounds else 0)
-                        + 200.0,
-                        False,  # noqa: FBT003
-                        accelParams=accel_params,
-                    )
-                )
+                hit = querier.raycast_down(point.x, ray_y, point.z, max_dist)
+                normal_result = None
 
-                if hit_face != -1:
+                if hit is not None:
                     # ray hit the mesh surface -- use hit point Y
-                    point.y = hit_point.y
+                    point.y = hit.point_y
                     height_snapped += 1
                     raycast_hits += 1
 
                     if not skip_tilt:
                         # get normal at the hit point for tilt calculation
-                        surface_pt = om2.MPoint(hit_point.x, hit_point.y, hit_point.z)
-                        _closest, normal = mesh_fn.getClosestPointAndNormal(
-                            surface_pt,
-                            om2.MSpace.kWorld,
+                        normal_result = querier.closest_point_and_normal(
+                            hit.point_x, hit.point_y, hit.point_z
                         )
                 else:
                     # ray missed -- find closest point on mesh surface
-                    query_point = om2.MPoint(point.x, point.y, point.z)
-                    closest, normal = mesh_fn.getClosestPointAndNormal(
-                        query_point,
-                        om2.MSpace.kWorld,
+                    closest = querier.closest_point_and_normal(
+                        point.x, point.y, point.z
                     )
+                    normal_result = closest
                     # if point is far from mesh (outside actual surface, inside bbox gap),
                     # discard it rather than placing grass in empty space
-                    dx = point.x - closest.x
-                    dz = point.z - closest.z
+                    dx = point.x - closest.point_x
+                    dz = point.z - closest.point_z
                     dist_xz = math.sqrt(dx * dx + dz * dz)
                     if dist_xz > self._clustering_config["min_distance"]:
                         discarded += 1
                         continue
                     # close enough -- snap full position to mesh surface
-                    point.x = closest.x
-                    point.y = closest.y
-                    point.z = closest.z
+                    point.x = closest.point_x
+                    point.y = closest.point_y
+                    point.z = closest.point_z
                     height_snapped += 1
                     fallback_used += 1
 
                 # compute tilt before appending so surviving_points and tilts
                 # stay in sync even if an exception is thrown
-                if skip_tilt:
+                if skip_tilt or normal_result is None:
                     tilt = (0.0, 0.0)
                 else:
-                    normal_vec = om2.MVector(normal)
-                    blended = normal_vec * (1.0 - g) + world_up * g
-
-                    length = blended.length()
-                    if length < 1e-8:
-                        tilt = (0.0, 0.0)
-                    else:
-                        d_hat = blended / length
-                        tilt_angle = math.degrees(
-                            math.acos(max(-1.0, min(1.0, d_hat.y)))
-                        )
-                        tilt_direction = math.degrees(math.atan2(d_hat.z, d_hat.x))
-                        tilt = (tilt_angle, tilt_direction)
+                    tilt = compute_tilt_from_normal(
+                        normal_result.normal_x,
+                        normal_result.normal_y,
+                        normal_result.normal_z,
+                        g,
+                    )
 
                 # append atomically so the two lists cannot go out of sync
                 surviving_points.append(point)

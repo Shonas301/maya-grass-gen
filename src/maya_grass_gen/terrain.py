@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -510,6 +511,7 @@ class TerrainAnalyzer:
         exclude_objects: list[str] | None = None,
         min_radius: float = 5.0,
         max_obstacle_radius: float | None = None,
+        terrain_querier: Any | None = None,
     ) -> list[DetectedObstacle]:
         """Detect obstacles from scene objects that intersect terrain bounds.
 
@@ -523,6 +525,8 @@ class TerrainAnalyzer:
             max_obstacle_radius: maximum radius for detected obstacles. obstacles larger
                 than this are filtered out (typically background/environment objects).
                 defaults to 5% of terrain diagonal if not specified.
+            terrain_querier: optional MeshQuerier for ground-height checks.
+                allows injecting a TrimeshQuerier for testing without Maya.
 
         Returns:
             list of detected obstacles from scene geometry
@@ -562,19 +566,14 @@ class TerrainAnalyzer:
         # set up terrain mesh raycast so we can check local ground height
         # per candidate shape (elevated connectors like lintels should not
         # count as ground obstacles even if their bbox covers the terrain XZ)
-        terrain_mesh_fn = None
-        terrain_accel = None
-        terrain_ray_y = (self._bounds.max_y + 500.0) if self._bounds else 1500.0
-        if self.mesh_name:
+        querier = terrain_querier
+        if querier is None and self.mesh_name:
             try:
-                import maya.api.OpenMaya as om2
-                sel = om2.MSelectionList()
-                sel.add(self.mesh_name)
-                dag_path = sel.getDagPath(0)
-                terrain_mesh_fn = om2.MFnMesh(dag_path)
-                terrain_accel = terrain_mesh_fn.autoUniformGridParams()
+                from maya_grass_gen.mesh_query import MayaMeshQuerier
+                querier = MayaMeshQuerier(self.mesh_name)
             except Exception:
-                terrain_mesh_fn = None
+                querier = None
+        terrain_ray_y = (self._bounds.max_y + 500.0) if self._bounds else 1500.0
 
         # get all mesh shapes in scene (using shapes directly gives per-component
         # bounding boxes instead of grouping all shapes under one transform)
@@ -616,24 +615,16 @@ class TerrainAnalyzer:
             # elevated connectors (lintels, arches) have large XZ bboxes but
             # their min_y is well above the terrain surface — they should not
             # block grass on the ground below them.
-            if terrain_mesh_fn is not None:
-                import maya.api.OpenMaya as om2
+            if querier is not None:
                 center_x_check = (obj_min_x + obj_max_x) / 2
                 center_z_check = (obj_min_z + obj_max_z) / 2
-                ray_source = om2.MFloatPoint(center_x_check, terrain_ray_y, center_z_check)
-                ray_dir = om2.MFloatVector(0, -1, 0)
                 try:
-                    hit_pt, _param, _face, _tri, _b1, _b2 = (
-                        terrain_mesh_fn.closestIntersection(
-                            ray_source, ray_dir,
-                            om2.MSpace.kWorld,
-                            terrain_ray_y + 1000.0,
-                            False,  # noqa: FBT003
-                            accelParams=terrain_accel,
-                        )
+                    hit = querier.raycast_down(
+                        center_x_check, terrain_ray_y, center_z_check,
+                        terrain_ray_y + 1000.0,
                     )
-                    if _face != -1:
-                        local_ground_y = hit_pt.y
+                    if hit is not None:
+                        local_ground_y = hit.point_y
                         # shape must reach within ground_clearance of the surface
                         # to count as a ground obstacle
                         ground_clearance = 20.0
@@ -648,7 +639,7 @@ class TerrainAnalyzer:
                     pass  # fall through to bbox checks below
 
             # fallback: global terrain max check when no terrain mesh available
-            if terrain_mesh_fn is None:
+            if querier is None:
                 height_tolerance = 50.0
                 if obj_min_y > self._bounds.max_y + height_tolerance:
                     if self.verbose:
