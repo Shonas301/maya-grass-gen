@@ -54,3 +54,6 @@ mayapy
 *.txt
 .DS_store
 *.log
+
+# maya
+*.ma

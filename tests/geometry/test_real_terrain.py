@@ -11,7 +11,6 @@ import math
 import pytest
 
 from maya_grass_gen.generator import GrassGenerator, GrassPoint
-from maya_grass_gen.mesh_query import TrimeshQuerier
 from maya_grass_gen.terrain import TerrainAnalyzer
 
 
@@ -124,7 +123,6 @@ class TestRealTerrainHeightSnapping:
         gen.set_gravity_weight(0.5)
 
         # mix of on-terrain and off-terrain points
-        import numpy as np
         cx = (bounds[0][0] + bounds[1][0]) / 2
         cz = (bounds[0][2] + bounds[1][2]) / 2
         gen._grass_points = [

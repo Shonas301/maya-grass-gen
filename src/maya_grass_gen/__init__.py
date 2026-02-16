@@ -46,12 +46,14 @@ Features:
 from maya_grass_gen.generator import GrassGenerator
 from maya_grass_gen.terrain import TerrainAnalyzer
 from maya_grass_gen.ui import show_grass_ui
+from maya_grass_gen.version import __version__
 from maya_grass_gen.wind import WindField
 
 __all__ = [
     "GrassGenerator",
     "TerrainAnalyzer",
     "WindField",
+    "__version__",
     "generate_grass",
     "show_grass_ui",
 ]
@@ -289,6 +291,7 @@ def generate_grass(
     import time
 
     start_time = time.time()
+    print(f"[maya_grass_gen {__version__}] generate_grass entrypoint ({__file__})")
 
     # print all input parameters
     if verbose:

@@ -1,11 +1,8 @@
 """tests for obstacle detection ground-height filtering using trimesh."""
 
-import numpy as np
 import pytest
-import trimesh
 
-from maya_grass_gen.mesh_query import TrimeshQuerier
-from maya_grass_gen.terrain import DetectedObstacle, TerrainAnalyzer
+from maya_grass_gen.terrain import TerrainAnalyzer
 
 
 class TestGroundHeightFiltering:

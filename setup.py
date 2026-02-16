@@ -6,6 +6,7 @@ from pathlib import Path
 from setuptools import find_namespace_packages, setup
 
 REQUIREMENTS_FILE = "requirements.in"
+VERSION_FILE = Path("src/maya_grass_gen/version.py")
 
 
 def get_requirements(requirements_file):
@@ -26,9 +27,18 @@ def get_requirements(requirements_file):
     return list(filter(bool, map(str.strip, requirements)))
 
 
+def get_version() -> str:
+    """Load package version without importing the package."""
+    for line in VERSION_FILE.read_text().splitlines():
+        if line.startswith("__version__ = "):
+            return line.split("=", 1)[1].strip().strip('"')
+    msg = f"Could not find __version__ in {VERSION_FILE}"
+    raise RuntimeError(msg)
+
+
 setup(
     name="maya_grass_gen",
-    version="0.1.0",
+    version=get_version(),
     description="Maya grass generation plugin using flow fields and MASH instancing",
     author="Jason Shipp",
     author_email="bit.shonas@gmail.com",

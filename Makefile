@@ -1,4 +1,4 @@
-.PHONY: install install-dev lint lint-fix typecheck test test-maya all clean release
+.PHONY: install install-dev lint lint-fix typecheck test test-maya package verify-package all clean release
 
 # path to mayapy - override with: make test-maya MAYAPY=/path/to/mayapy
 MAYAPY ?= /System/Volumes/Data/Applications/Autodesk/maya2026/Maya.app/Contents/bin/mayapy
@@ -26,6 +26,12 @@ test:
 
 test-maya:
 	$(MAYAPY) -m pytest tests/integration -v
+
+package:
+	./scripts/create_zip.sh
+
+verify-package:
+	./scripts/verify_plugin.sh --zip dist/maya-grass-gen.zip
 
 all: lint typecheck test
 

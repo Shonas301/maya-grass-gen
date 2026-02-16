@@ -16,7 +16,7 @@ def _pref(name, default):
     return default
 
 
-def diagnose():
+def diagnose():  # noqa: C901, PLR0912
     """run grass generation with full diagnostics."""
     terrain = _pref("terrain", "")
     grass = _pref("grass", "")
@@ -127,7 +127,7 @@ def diagnose():
             if line.startswith("positions = "):
                 # count items
                 if line.strip() == "positions = []":
-                    print(f"[DIAG]   WARNING: positions list is EMPTY — no grass points!")
+                    print("[DIAG]   WARNING: positions list is EMPTY — no grass points!")
                 else:
                     # rough count of tuples
                     count = line.count("(")
@@ -137,7 +137,7 @@ def diagnose():
     # check the Repro mesh (MASH instancer output)
     repros = cmds.ls(f"{network_name}*Repro*", type="mesh") or []
     if not repros:
-        repros = cmds.ls(f"*Repro*", type="mesh") or []
+        repros = cmds.ls("*Repro*", type="mesh") or []
     print(f"[DIAG] Repro meshes: {repros}")
     for r in repros:
         parent = (cmds.listRelatives(r, parent=True) or [None])[0]
@@ -152,8 +152,8 @@ def diagnose():
     print(f"[DIAG] grass geo '{grass}' bbox center after generation: "
           f"({cx:.3f}, {cy:.3f}, {cz:.3f})")
     if abs(cx) > 1 or abs(cy) > 1 or abs(cz) > 1:
-        print(f"[DIAG]   WARNING: grass geo center is far from origin — "
-              f"MASH instances may appear offset")
+        print("[DIAG]   WARNING: grass geo center is far from origin — "
+              "MASH instances may appear offset")
 
     print()
     print("=" * 60)

@@ -2,6 +2,8 @@
 // drag this file into maya viewport to install
 
 global proc install() {
+    string $pluginVersion = "__PLUGIN_VERSION__";
+
     // get this script's location
     // whatIs returns: "Mel procedure found in: /path/to/install.mel"
     string $scriptLocation = `whatIs "install"`;
@@ -26,6 +28,7 @@ global proc install() {
 
     // get module root (parent directory of this script)
     string $modulePath = dirname($scriptPath);
+    print ("maya_grass_plugin " + $pluginVersion + " install entrypoint (" + $scriptPath + ")\n");
 
     // get maya modules directory
     string $modulesDir = `internalVar -userAppDir` + "modules/";

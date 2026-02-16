@@ -8,6 +8,8 @@ the button is added to a 'Custom' shelf. if the shelf doesn't exist, it is creat
 
 from maya import cmds, mel
 
+MAYA_GRASS_PLUGIN_VERSION = "__PLUGIN_VERSION__"
+
 
 def check_dependencies():
     """Check that required python dependencies are available."""
@@ -81,6 +83,10 @@ def add_grass_shelf_button():
 
 def startup():
     """Run all startup tasks."""
+    print(
+        "maya_grass_plugin "
+        f"{MAYA_GRASS_PLUGIN_VERSION} startup entrypoint ({__file__})"
+    )
     add_grass_shelf_button()
     check_dependencies()
 

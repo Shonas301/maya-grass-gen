@@ -15,6 +15,8 @@ from typing import Any
 
 from maya import cmds
 
+from maya_grass_gen.version import __version__
+
 # window constants
 WINDOW_NAME = "grassGeneratorUI"
 PREF_PREFIX = "grassUI_"
@@ -88,6 +90,7 @@ def execute_grass_generation(*_args: Any) -> None:
         *args: swallow Maya's default callback arguments
     """
     # read UI values
+    print(f"[maya_grass_gen {__version__}] execute_grass_generation entrypoint ({__file__})")
     terrain = cmds.textFieldButtonGrp("terrain_field", query=True, text=True)
     grass = cmds.textFieldButtonGrp("grass_field", query=True, text=True)
 
@@ -194,6 +197,7 @@ def show_grass_ui() -> None:
     Parameter values are persisted between Maya sessions using optionVars.
     """
     # singleton pattern - delete existing window
+    print(f"[maya_grass_gen {__version__}] show_grass_ui entrypoint ({__file__})")
     if cmds.window(WINDOW_NAME, exists=True):
         cmds.deleteUI(WINDOW_NAME)
 
