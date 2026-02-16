@@ -5,7 +5,7 @@ import math
 import pytest
 
 from maya_grass_gen.generator import GrassGenerator, GrassPoint
-from maya_grass_gen.mesh_query import TrimeshQuerier, compute_tilt_from_normal
+from maya_grass_gen.mesh_query import compute_tilt_from_normal
 from maya_grass_gen.terrain import TerrainAnalyzer
 
 

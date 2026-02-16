@@ -97,17 +97,12 @@ fi
 
 # build zip
 info "building plugin zip..."
-ZIP_PATH="$REPO_DIR/maya-grass-gen.zip"
+ZIP_PATH="$REPO_DIR/dist/maya-grass-gen.zip"
 if $DRY_RUN; then
-    echo "  would run: scripts/create_zip.sh (output to $ZIP_PATH)"
+    echo "  would run: scripts/create_zip.sh (output to $ZIP_PATH, with stage+verify)"
 else
-    # build zip into repo root instead of parent dir for cleaner release
     rm -f "$ZIP_PATH"
-    cd "$REPO_DIR"
-    zip -r "$ZIP_PATH" maya_grass_plugin \
-        -x "*__pycache__*" \
-        -x "*.pyc" \
-        -x "*.DS_Store"
+    "$REPO_DIR/scripts/create_zip.sh" --version "$VERSION"
     echo "  built: $ZIP_PATH ($(du -h "$ZIP_PATH" | cut -f1 | xargs))"
 fi
 
@@ -137,7 +132,7 @@ else
         --generate-notes
 fi
 
-# cleanup zip from repo root
+# cleanup zip from dist
 if ! $DRY_RUN; then
     rm -f "$ZIP_PATH"
 fi

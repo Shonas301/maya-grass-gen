@@ -45,7 +45,8 @@ def main() -> None:
 
         try:
             bbox = cmds.exactWorldBoundingBox(transform)
-        except Exception:
+        except Exception as exc:
+            print(f"warning: failed to read bbox for {transform}: {exc}")
             continue
 
         # check XZ overlap with terrain

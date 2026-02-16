@@ -12,7 +12,7 @@ from maya_grass_gen.mesh_query import TrimeshQuerier
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
-@pytest.fixture()
+@pytest.fixture
 def flat_plane():
     """100x100 flat plane at y=0, centered at origin."""
     vertices = np.array([
@@ -28,13 +28,13 @@ def flat_plane():
     return trimesh.Trimesh(vertices=vertices, faces=faces)
 
 
-@pytest.fixture()
+@pytest.fixture
 def flat_plane_querier(flat_plane):
     """TrimeshQuerier wrapping the flat plane."""
     return TrimeshQuerier(flat_plane)
 
 
-@pytest.fixture()
+@pytest.fixture
 def hilly_terrain():
     """10x10 grid plane with a raised center hill (y peaks at ~20).
 
@@ -62,13 +62,13 @@ def hilly_terrain():
     return trimesh.Trimesh(vertices=vertices, faces=faces)
 
 
-@pytest.fixture()
+@pytest.fixture
 def hilly_terrain_querier(hilly_terrain):
     """TrimeshQuerier wrapping the hilly terrain."""
     return TrimeshQuerier(hilly_terrain)
 
 
-@pytest.fixture()
+@pytest.fixture
 def irregular_terrain():
     """L-shaped mesh (not rectangular) to test spillover discard.
 
@@ -99,13 +99,13 @@ def irregular_terrain():
     return trimesh.Trimesh(vertices=vertices, faces=faces)
 
 
-@pytest.fixture()
+@pytest.fixture
 def irregular_terrain_querier(irregular_terrain):
     """TrimeshQuerier wrapping the irregular terrain."""
     return TrimeshQuerier(irregular_terrain)
 
 
-@pytest.fixture()
+@pytest.fixture
 def column_mesh():
     """A single column at ground level: thin cylinder from y=0 to y=30.
 
@@ -135,7 +135,7 @@ def column_mesh():
     return trimesh.Trimesh(vertices=vertices, faces=faces)
 
 
-@pytest.fixture()
+@pytest.fixture
 def lintel_mesh():
     """An elevated lintel connecting two columns: wide flat piece at y=28-30.
 

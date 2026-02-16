@@ -10,11 +10,11 @@ into tests/geometry/fixtures/ for use with trimesh-based regression tests.
 from __future__ import annotations
 
 import argparse
-import os
 import sys
+from pathlib import Path
 
 
-def export_mesh_as_obj(mesh_name: str, output_path: str) -> None:
+def export_mesh_as_obj(mesh_name: str, output_path: str | Path) -> None:
     """Export a single mesh shape as OBJ.
 
     uses maya's objExport plugin to write the mesh. selects only the
@@ -28,7 +28,7 @@ def export_mesh_as_obj(mesh_name: str, output_path: str) -> None:
 
     cmds.select(mesh_name, replace=True)
     cmds.file(
-        output_path,
+        str(output_path),
         force=True,
         options="groups=0;ptgroups=0;materials=0;smoothing=0;normals=1",
         type="OBJexport",
@@ -111,12 +111,12 @@ def main() -> None:
         return
 
     # determine output directory
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.dirname(script_dir)
-    output_dir = args.output_dir or os.path.join(
-        repo_root, "tests", "geometry", "fixtures"
+    script_dir = Path(__file__).resolve().parent
+    repo_root = script_dir.parent
+    output_dir = Path(args.output_dir) if args.output_dir else (
+        repo_root / "tests" / "geometry" / "fixtures"
     )
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # check terrain mesh exists
     if not cmds.objExists(args.terrain):
@@ -137,23 +137,24 @@ def main() -> None:
         f"[{bbox[3]:.1f}, {bbox[4]:.1f}, {bbox[5]:.1f}]"
     )
 
-    terrain_obj = os.path.join(output_dir, "terrain_ground.obj")
+    terrain_obj = output_dir / "terrain_ground.obj"
     export_mesh_as_obj(args.terrain, terrain_obj)
 
     if args.obstacles:
         # find meshes that intersect the terrain bounding box
         terrain_bbox = cmds.exactWorldBoundingBox(args.terrain)
-        t_min_x, t_min_y, t_min_z = terrain_bbox[0], terrain_bbox[1], terrain_bbox[2]
-        t_max_x, t_max_y, t_max_z = terrain_bbox[3], terrain_bbox[4], terrain_bbox[5]
+        t_min_x, _t_min_y, t_min_z = terrain_bbox[0], terrain_bbox[1], terrain_bbox[2]
+        t_max_x, _t_max_y, t_max_z = terrain_bbox[3], terrain_bbox[4], terrain_bbox[5]
 
         print("\nscanning for obstacle meshes...")
         obstacle_count = 0
         for mesh in list_scene_meshes():
-            if mesh == args.terrain or mesh == f"|{args.terrain}":
+            if mesh in (args.terrain, f"|{args.terrain}"):
                 continue
             try:
                 obj_bbox = cmds.exactWorldBoundingBox(mesh)
-            except Exception:
+            except Exception as exc:
+                print(f"  warning: failed to read bbox for {mesh}: {exc}")
                 continue
 
             # check XZ overlap with terrain
@@ -168,7 +169,7 @@ def main() -> None:
             short_name = mesh.split("|")[-1]
             info = get_mesh_info(mesh)
             print(f"  found obstacle: {short_name} ({info['vertices']} verts)")
-            obj_path = os.path.join(output_dir, f"obstacle_{short_name}.obj")
+            obj_path = output_dir / f"obstacle_{short_name}.obj"
             export_mesh_as_obj(mesh, obj_path)
             obstacle_count += 1
 

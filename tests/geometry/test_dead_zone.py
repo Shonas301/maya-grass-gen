@@ -8,25 +8,25 @@ this test reproduces the issue observed when using grasses_shape_2 on the
 sq02_imgW_sh170_setDress_v007 scene: a large swath of open dead space in
 the field between columns on the south side (as seen from above).
 
-root cause: cube_8/cube_9 shapes have massive bounding boxes (radius ~1103)
-that should be filtered by max_obstacle_radius (5% of terrain diagonal = 304)
-but slip through obstacle detection. their influence zones (radius ~2757)
-cover 516% of the terrain, creating near-total grass exclusion.
+root cause: cube_8/cube_9 shapes have massive bounding boxes (radius ~1103).
+the original max_obstacle_radius was 25% of terrain diagonal (1522), which
+let them through. commit ee6a601 lowered it to 5% (304), which filters them.
+the .ma file that exhibited the bug was generated before that fix.
+
+the tests here verify that:
+1. the massive cubes DO create a dead zone when included as obstacles
+2. the max_obstacle_radius math correctly rejects them
+3. removing them restores normal grass coverage
 """
 
 import math
 
-import numpy as np
-import pytest
-
-from maya_grass_gen.generator import GrassGenerator, GrassPoint
-from maya_grass_gen.mesh_query import TrimeshQuerier
-from maya_grass_gen.terrain import DetectedObstacle, TerrainAnalyzer
+from maya_grass_gen.generator import GrassGenerator
+from maya_grass_gen.terrain import TerrainAnalyzer
 
 # actual column positions from the production scene (south path)
 # extracted via mayapy from sq02_imgW_sh170_setDress_v007.ma
 SOUTH_COLUMNS = [
-    # (center_x, center_z, bbox_width_x, bbox_width_z)
     (-1538, -715, 38, 38),   # pCylinder14
     (-1343, -705, 39, 39),   # pCylinder1
     (-1147, -696, 39, 39),   # pCylinder2
@@ -44,7 +44,6 @@ SOUTH_COLUMNS = [
 # by max_obstacle_radius but currently are not.
 # extracted from the MASH Python node in the generated .ma file.
 MASSIVE_CUBES = [
-    # (center_x, center_z, radius)
     (-321.27, -550.92, 1103.01),   # cube_9
     (-324.45, -537.55, 1103.01),   # cube_8
     (-663.01, -1304.52, 1103.01),  # cube_9 (referenced)
@@ -214,7 +213,7 @@ class TestSouthPathDeadZone:
                 )
 
         assert len(empty_zones) == 0, (
-            f"dead zones found with no grass:\n" +
+            "dead zones found with no grass:\n" +
             "\n".join(f"  - {z}" for z in empty_zones)
         )
 

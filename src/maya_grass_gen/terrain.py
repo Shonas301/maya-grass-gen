@@ -635,8 +635,9 @@ class TerrainAnalyzer:
                                     f"(min_y={obj_min_y:.1f}, ground={local_ground_y:.1f})"
                                 )
                             continue
-                except Exception:
-                    pass  # fall through to bbox checks below
+                except Exception as exc:
+                    if self.verbose:
+                        print(f"  warning: ground raycast failed for {short_name}: {exc}")
 
             # fallback: global terrain max check when no terrain mesh available
             if querier is None:

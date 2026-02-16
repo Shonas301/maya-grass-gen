@@ -84,6 +84,7 @@ class TrimeshQuerier:
     """
 
     def __init__(self, mesh: trimesh.Trimesh) -> None:
+        """Initialize with a trimesh mesh used for query operations."""
         self._mesh = mesh
 
     def raycast_down(
@@ -98,10 +99,7 @@ class TrimeshQuerier:
         if len(locations) == 0:
             return None
         # if multiple hits, pick the one closest to the ray origin (highest y)
-        if len(locations) > 1:
-            best = int(np.argmax(locations[:, 1]))
-        else:
-            best = 0
+        best = int(np.argmax(locations[:, 1])) if len(locations) > 1 else 0
         hit = locations[best]
         dist = y_origin - hit[1]
         if dist > max_dist:
@@ -140,14 +138,15 @@ class MayaMeshQuerier:
     """
 
     def __init__(self, mesh_name: str) -> None:
-        import maya.api.OpenMaya as om2
+        """Initialize query helpers from a Maya mesh name."""
+        from maya.api import OpenMaya
 
-        sel = om2.MSelectionList()
+        sel = OpenMaya.MSelectionList()
         sel.add(mesh_name)
         dag_path = sel.getDagPath(0)
-        self._mesh_fn = om2.MFnMesh(dag_path)
+        self._mesh_fn = OpenMaya.MFnMesh(dag_path)
         self._accel = self._mesh_fn.autoUniformGridParams()
-        self._om2 = om2
+        self._om2 = OpenMaya
 
     def raycast_down(
         self, x: float, y_origin: float, z: float, max_dist: float

@@ -13,7 +13,11 @@ outputs:
 """
 
 import json
-import os
+import tempfile
+from pathlib import Path
+
+from maya_grass_gen.generator import GrassGenerator
+from maya_grass_gen.terrain import TerrainAnalyzer
 
 # adjust these to match your generation parameters
 TERRAIN_MESH = "ground"
@@ -21,11 +25,10 @@ POINT_COUNT = 5000          # change to match what you normally generate
 SEED = 42
 GRASS_SHAPE = "grasses_grass_2"    # the instanced shape
 EXCLUDE_FROM_OBSTACLES = []        # add any objects to exclude
-
-# --- run generation ---
-from maya_grass_gen import generate_grass
-from maya_grass_gen.generator import GrassGenerator
-from maya_grass_gen.terrain import TerrainAnalyzer
+OUTPUT_DIR = Path(tempfile.gettempdir())
+OBSTACLES_PATH = OUTPUT_DIR / "grass_diag_obstacles.json"
+POINTS_PATH = OUTPUT_DIR / "grass_diag_points.json"
+SUMMARY_PATH = OUTPUT_DIR / "grass_diag_summary.txt"
 
 # set up terrain
 terrain = TerrainAnalyzer(mesh_name=TERRAIN_MESH, verbose=True)
@@ -35,7 +38,7 @@ print(f"terrain bounds: {terrain.bounds}")
 
 # detect obstacles
 obstacles = terrain.detect_obstacles_from_scene(
-    exclude_objects=[TERRAIN_MESH, GRASS_SHAPE] + EXCLUDE_FROM_OBSTACLES,
+    exclude_objects=[TERRAIN_MESH, GRASS_SHAPE, *EXCLUDE_FROM_OBSTACLES],
 )
 print(f"\ndetected {len(obstacles)} obstacles")
 
@@ -57,9 +60,9 @@ for obs in terrain.obstacles:
         "source": obs.source,
     })
 
-with open("/tmp/grass_diag_obstacles.json", "w") as f:
+with OBSTACLES_PATH.open("w", encoding="utf-8") as f:
     json.dump(obs_data, f, indent=2)
-print(f"\nwrote {len(obs_data)} obstacles to /tmp/grass_diag_obstacles.json")
+print(f"\nwrote {len(obs_data)} obstacles to {OBSTACLES_PATH}")
 
 # --- dump point positions ---
 pts_data = []
@@ -70,9 +73,9 @@ for p in gen._grass_points:
         "z": p.z,
     })
 
-with open("/tmp/grass_diag_points.json", "w") as f:
+with POINTS_PATH.open("w", encoding="utf-8") as f:
     json.dump(pts_data, f, indent=2)
-print(f"wrote {len(pts_data)} points to /tmp/grass_diag_points.json")
+print(f"wrote {len(pts_data)} points to {POINTS_PATH}")
 
 # --- compute spatial density map for the south column region ---
 # region: x=[-1700, 0], z=[-1100, -500]
@@ -99,18 +102,18 @@ summary_lines.append(f"bounds: {terrain.bounds}")
 summary_lines.append(f"point count requested: {POINT_COUNT}")
 summary_lines.append(f"points generated: {len(gen._grass_points)}")
 summary_lines.append(f"obstacles detected: {len(obstacles)}")
-summary_lines.append(f"")
-summary_lines.append(f"obstacles:")
+summary_lines.append("")
+summary_lines.append("obstacles:")
 for obs in sorted(terrain.obstacles, key=lambda o: -o.radius):
     summary_lines.append(
         f"  {obs.source:40s} pos=({obs.center_x:7.0f},{obs.center_z:7.0f}) r={obs.radius:6.1f}"
     )
-summary_lines.append(f"")
+summary_lines.append("")
 summary_lines.append(f"south region density (x=[{region['min_x']},{region['max_x']}], z=[{region['min_z']},{region['max_z']}]):")
 summary_lines.append(f"points in region: {total_in_region}")
 summary_lines.append(f"cell size: {cell_size}")
-summary_lines.append(f"")
-summary_lines.append(f"density map (# = has points, . = empty, numbers = count):")
+summary_lines.append("")
+summary_lines.append("density map (# = has points, . = empty, numbers = count):")
 
 # column positions for reference
 col_positions = [
@@ -141,11 +144,11 @@ for zi in range(nz):
     summary_lines.append(f"  z={z_val:6.0f} |{row}|")
 
 summary_text = "\n".join(summary_lines)
-with open("/tmp/grass_diag_summary.txt", "w") as f:
+with SUMMARY_PATH.open("w", encoding="utf-8") as f:
     f.write(summary_text)
 
 print(f"\n{'='*60}")
 print(summary_text)
 print(f"{'='*60}")
-print(f"\ndiagnostic files written to /tmp/grass_diag_*.json/.txt")
+print(f"\ndiagnostic files written to {OUTPUT_DIR}/grass_diag_*.json/.txt")
 print("copy these files back for analysis")
